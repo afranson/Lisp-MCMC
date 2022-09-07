@@ -1,0 +1,107 @@
+;;;; nv magnetometry specific walker fitting stuff
+
+(in-package :mcmc-fitting)
+
+(defun nv-data->separated (data)
+  (mapcar #'(lambda (x) (list (elt data 0) x)) (subseq data 1)))
+
+(defun nv-dir->data (directory)
+  (let ((files (uiop:directory-files directory)))
+    (mapcan #'(lambda (x) (nv-data->separated (file->data-list x :delim #\;))) files)))
+
+(defun log-liklihood-nv (fn params data error)
+  (declare (optimize speed)
+	   (cons data)
+	   (function fn))
+  (let ((x (elt data 0))
+	(y (elt data 1)))
+    (declare (simple-vector x y))
+    (reduce #'+ (map 'vector #'(lambda (x y) (log-normal (apply fn x params) error y)) x y))))
+
+(defun log-prior-nv (params data)
+  (declare (optimize speed)
+	   (ignore data))
+  (prior-bounds-let ((:scale1 1d-5 1d1)
+		     (:scale2 1d-5 1d1)
+	  	     (:mu1 2850 2870)
+		     (:mu2 2870 2890)
+		     (:sigma 9 20)
+		     (:bg0 0 1d-5))
+    (+ bounds-total
+       (if (> mu1 mu2) -1e9 0)
+       (if (< (- mu2 mu1) 6) -1e9 0)
+       (if (not (< 0.9 (/ scale1 scale2) 1.1)) -1e9 0))))
+
+(defun nv-data-std-dev (data)
+  (let* ((y-data (elt data 1))
+	 (y-length/10 (floor (length y-data) 10))
+	 (y-start-std-dev (standard-deviation (subseq y-data 0 y-length/10)))
+	 (y-end-std-dev (standard-deviation (subseq y-data (- (length y-data) y-length/10)))))
+    (min y-start-std-dev y-end-std-dev)))
+
+(defun guess-nv-params (data)
+  (let* ((y (elt data 1))
+	 (y-max (reduce #'max y))
+	 (y-min (reduce #'min y))
+	 (scale (/ (- y-max y-min) 4.4d-5)))
+    (list :scale1 scale :scale2 scale :mu1 2863d0 :mu2 2873d0 :sigma 10d0 :bg0 (float y-min 0d0))))
+
+(defun nv-walker (data)
+  (create-walker #'double-lorentzian-bg
+		 (guess-nv-params data)
+		 data
+		 (nv-data-std-dev data)
+		 #'log-liklihood-nv
+		 #'log-prior-nv))
+
+(defun dir->nv-walkers (dir)
+  (let ((walkers (mapcar #'nv-walker (dir->data dir))))
+    (mapc #'(lambda (x) (walker-adaptive-steps x)) walkers)
+    walkers))
+
+(defun file->nv-walkers (filename)
+  (let ((walkers (mapcar #'nv-walker (nv-data->separated (file->data-list filename :delim #\;)))))
+    (mapc #'(lambda (x) (walker-adaptive-steps x)) walkers)
+    walkers))
+
+(defun walker-field-offset (the-walker)
+  (walker-get-f the-walker (/ (- :mu2 :mu1) 2 2.8) 1000))
+
+;;; TODO problem for another day
+;; (defun walker-set-field-offset (the-walker-set background-splitting)
+;;   (walker-set-get-f the-walker-set (- (/ (- :mu2 :mu1) 2 2.8) background-splitting) 1000))
+
+
+(defmacro walker-set-make-file-3d-plot-exp (the-walker-set exp row-length &optional file-out take)
+  (let ((walk-set (gensym))
+	(row-len (gensym))
+	(xs (gensym))
+	(ys (gensym))
+	(field-offsets (gensym))
+	(filename-out (gensym)))
+    `(let* ((,walk-set ,the-walker-set)
+	    (,row-len ,row-length)
+	    (,xs (mapcar #'(lambda (x) (mod x ,row-len)) (linspace 0 (- (length ,walk-set) 1))))
+	    (,ys (mapcar #'(lambda (x) (floor x ,row-len)) (linspace 0 (- (length ,walk-set) 1))))
+	    (,field-offsets (mapcar #' eval (walker-set-get-f ,walk-set ',exp ,take)))
+	    (,filename-out ,file-out)
+	    (,filename-out (if ,filename-out ,filename-out "./3d-temp-file.txt")))
+       (with-open-file (out ,filename-out :direction :output :if-exists :supersede)
+	 (mapcar #'(lambda (x)
+		     (format out "~f ~f ~f~%" (elt x 0) (elt x 1) (elt x 2))
+		     (when (= (elt x 0) (- ,row-len 1))
+		       (terpri out)))
+		 (mapcar #'list ,xs ,ys ,field-offsets))))))
+
+
+(defun nv-pretty-heatmap (&key (map nil) (cbar-range '(0 "*")) (z-range '(-5 "*")))
+  (xlabel "X Pos" :replot nil)
+  (ylabel "Y Pos" :replot nil)
+  (zlabel "Field Offset (Oe)" :replot nil)
+  (format-plot t (format nil "set cbrange [~a:~a]" (elt cbar-range 0) (elt cbar-range 1)))
+  (format-plot t (format nil "set zrange [~a:~a]" (elt z-range 0) (elt z-range 1)))
+  (format-plot t "set zlabel rotate parallel")
+  (if map
+      (format-plot t "set view map")
+      (format-plot t "unset view"))
+  (replot))
