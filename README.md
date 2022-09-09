@@ -28,10 +28,10 @@ Finally, a prior which is establish the initial environment of the MCMC simulati
 ```
 (defun my-log-prior (params data)
     (declare (ignore data))
-	(prior-bounds-let ((:param0 0 1d4)
-		(:much-better-param-name1 100 150)
-		(:param2 -25 -24))
-	  bounds-total))
+    (prior-bounds-let ((:param0 0 1d4)
+                       (:much-better-param-name1 100 150)
+                       (:param2 -25 -24))
+      bounds-total))
 ```
 Above we make use of the anaphoic macro 'prior-bounds-let' to bound the values of the parameters from our function. The macro generates the 'bounds-total' variable that holds to penalty if the MCMC algorithm attempts to step outside those bounds. IT also generates values such as 'param0-bounds' which holds the penalty for just the :param0 term.
 
