@@ -28,9 +28,9 @@
 		     (:sigma 9 20)
 		     (:bg0 0 1d-5))
     (+ bounds-total
-       (if (> mu1 mu2) -1e9 0)
-       (if (< (- mu2 mu1) 6) -1e9 0)
-       (if (not (< 0.9 (/ scale1 scale2) 1.1)) -1e9 0))))
+       (if (> mu1 mu2) -1e9 0e0)
+       (if (< (- mu2 mu1) 6) -1e9 0e0)
+       (if (not (< 0.9 (/ scale1 scale2) 1.1)) -1e9 0e0))))
 
 (defun nv-data-std-dev (data)
   (let* ((y-data (elt data 1))
@@ -55,7 +55,7 @@
 		 #'log-prior-nv))
 
 (defun dir->nv-walkers (dir)
-  (let ((walkers (mapcar #'nv-walker (dir->data dir))))
+  (let ((walkers (mapcar #'nv-walker (nv-dir->data dir))))
     (mapc #'(lambda (x) (walker-adaptive-steps x)) walkers)
     walkers))
 

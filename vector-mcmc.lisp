@@ -16,17 +16,6 @@
 ;; arrays do a lot
 ;; arrays aren't much better than lists without optimization
 
-;;; If a fasl was stale, try to recompile and load (once).
-;; (defmethod asdf:perform :around ((o asdf:load-op)
-;;                                  (c asdf:cl-source-file))
-;;    (handler-case (call-next-method o c)
-;;       ;; If a fasl was stale, try to recompile and load (once).
-;;       (sb-ext:invalid-fasl ()
-;;          (asdf:perform (make-instance 'asdf:compile-op) c)
-;;          (call-next-method))))
-
-; (load "~/quicklisp/setup.lisp")
-
 ;; (ql:quickload :gsll)
 ;; (ql:quickload :antik)
 
@@ -307,7 +296,7 @@
 		   (param-name-bound (read-from-string (concatenate 'string (symbol-name key) "-bound"))))
 	       `(,param-name-bound (the double-float (if (< ,low-expr ,param-name ,high-expr)
 					0d0
-					(* -1d100 (- (exp (/ (min (abs (- ,param-name ,high-expr)) (abs (- ,param-name ,low-expr))) 1d5)) 1))))))))
+					(* -1d100 (- (exp (* (min (abs (- ,param-name ,high-expr)) (abs (- ,param-name ,low-expr))) 1d-5)) 1))))))))
 	 (get-bound-name (key-low-high)
 	   (destructuring-bind (key low-expr high-expr) key-low-high
 	     (declare (ignore low-expr high-expr))
@@ -344,7 +333,8 @@
 (defun create-log-liklihood-normal-weighted (fn params data error data-column-x data-column-y)
   (declare (optimize speed)
 	   (cons data)
-	   (function fn))
+	   (function fn)
+	   (simple-vector error))
   (let* ((x (elt data data-column-x))
 	 (y (elt data data-column-y))
 	 (error (if (= 1 (length error)) (make-array (length x) :initial-element (elt error 0)) error)))
@@ -374,12 +364,6 @@
   (let ((results (mapcar #'(lambda (ll f d e) (funcall ll f params d e)) log-liklihood fn data error)))
     (mapcar #'(lambda (res fn) (if (numberp res) fn res)) results log-liklihood)))
 
-;; (defun error-proper-depth (item)
-;;   (cond ((numberp item) (list (list item)))
-;; 	((atom item) (list item))
-;; 	((consp (car item)) (car item))
-;; 	((numberp (car item)) (list item))
-;; 	(t item)))
 
 (defun error-clean (item)
   (cond ((numberp item)

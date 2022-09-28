@@ -108,14 +108,6 @@
     (min y-start-std-dev y-end-std-dev)))
 
 
-(defun lorder-walker (data error &optional params)
-  (unless params (setq params (data->guess-lorder-mixed-bg-params (map-matrix #'(lambda (x) (float x 1.0d0)) data))))
-  (create-walker #'lorder params data error #'log-liklihood-normal #'log-prior-lorder))
-
-(defun lorder-bg-walker (data error &optional params)
-  (unless params (setq params (data->guess-lorder-mixed-bg-params (map-matrix #'(lambda (x) (float x 1.0d0)) data))))
-  (create-walker #'lorder+bg params data error #'log-liklihood-normal #'log-prior-lorder-mixed))
-
 (defun lorder-mixed-bg-walker (data error &optional params)
   (unless params (setq params (data->guess-lorder-mixed-bg-params (map-matrix #'(lambda (x) (float x 1.0d0)) data))))
   (create-walker #'lorder-mixed-bg params data error #'log-liklihood-normal #'log-prior-lorder-mixed))
@@ -139,11 +131,6 @@
   (let* ((data (file->data-list filename))
 	 (the-walker (funcall walker-function (funcall conditioning-function data) (lorder-data-std-dev data) params)))
     the-walker))
-
-(defun directory->lorder-fits (directory walker-function conditioning-function &optional (n 30000) (temperature 10) init-params)
-  (let ((data-files (remove-bad-files (uiop:directory-files directory))))
-    (mapcar #'(lambda (x) (file->lorder-walker x walker-function conditioning-function init-params)) data-files)))
-
 
 
 ;;; 2nd level fits helpers (crunch frequency and angular sweep into one massive set)
@@ -197,7 +184,7 @@
 
 
 (defun walker-full-fit-load (filename)
-  (walker-load filename (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w) #'log-liklihood-normal-angular+freq #'log-prior-angular+freq))
+  (walker-load filename (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w) #'log-liklihood-normal #'log-prior-flat))
 
 
 
