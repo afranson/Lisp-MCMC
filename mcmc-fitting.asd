@@ -4,7 +4,7 @@
   :serial t
   :description "MCMC-Based Library for Fitting Data"
   :author "Andrew Franson"
-  :license "GPL"
+  :license "GPLv3"
   :depends-on (:vgplot)
   :components ((:file "package")
 	       (:file "utility")
