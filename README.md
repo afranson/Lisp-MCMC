@@ -4,11 +4,13 @@ A framework for doing Markov chain Monte Carlo (MCMC) based fitting with Common 
 
 ## Basic Usage
 
-Most functions are softly namespaced by starting with 'walker-', e.g. walker-adaptive-steps, walker-plot-data-and-fit, walker-save, walker-liklihood-plot, etc. The significant anomoly is 'walker-create', to initialize a walker.
+A quick example can be found in test.lisp.
 
-Generally, you will want to abstract the 'create-walker' function to specialize to your specific fitting case (lorentzians, gaussians, whatever function).
+Most functions are softly namespaced by starting with 'walker-', e.g. walker-adaptive-steps, walker-plot-data-and-fit, walker-save, walker-liklihood-plot, etc.
 
-You will need to specify several functions before your MCMC journey can begin. First, a fitting function (if that's what you are trying to do), otherwise a function that assists in computing the liklihood that you want to maximize:
+Generally, you will want to abstract the 'walker-init' function to specialize to your specific fitting case (lorentzians, gaussians, whatever function).
+
+You will need to specify several functions before your MCMC journey can begin. First, a fitting function, or more generally, a function that assists in computing the liklihood that you want to maximize:
 ```
 (defun my-function (x &key param0 much-better-param-name1 param2 &allow-other-keys) ... body)
 ```
@@ -24,7 +26,7 @@ Next, a liklihood function (or generally, a 'loss' function) that you want to ma
 ```
 The current built-in functions are log-normal and log-poisson.
 
-Finally, a prior which is establish the initial environment of the MCMC simulation, or if your just interested in some basic fitting, just use a flat prior (included as log-prior-flat):
+Finally, a prior which establishes the initial environment of the MCMC simulation, or if your just interested in some basic fitting, just use a flat prior (included as log-prior-flat):
 ```
 (defun my-log-prior (params data)
     (declare (ignore data))
@@ -38,7 +40,7 @@ Above we make use of the anaphoic macro 'prior-bounds-let' to bound the values o
 Once all that's together, you can create your MCMC walker:
 ```
 (defvar my-walker)
-(setq my-walker (walker-create my-function initial-params data error log-liklihood-normal-weighted my-log-prior))
+(setq my-walker (walker-init :fn my-function :data data :params initial-params :stddev stddev :log-liklihood #'log-liklihood-normal-weighted :log-prior #'my-log-prior))
 ```
 and then run it
 ```
@@ -48,6 +50,7 @@ and then see if it produced anything useful (requires vg-plot package)
 ```
 (walker-plot-data-and-fit my-walker)
 (walker-plot-liklihood-plot my-walker)
+(walker-catepillar-plots my-walker)
 ```
 
 ## Global Parameter Fitting
