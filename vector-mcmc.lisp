@@ -213,6 +213,14 @@ visualize it
 	((and (consp stddev) (consp (elt stddev 0)))
 	 (mapcar #'(lambda (x) (make-array (length x) :initial-contents x)) stddev))))
 
+(defun clean-data (data fn)
+  (cond ((and (consp data) (/= (length data) (length fn)))
+	 (list data))))
+
+(defun create-walker-data (data &rest columns)
+  (list (mapcar #'(lambda (x) (apply #'vector x))
+		(mapcar #'(lambda (y) (elt data y)) columns))))
+
 (defun to-double-floats (l)
   (cond ((numberp l)
 	 (coerce l 'double-float))
@@ -246,7 +254,7 @@ Used as:
        ,@(mapcar #'(lambda (x) `(,(symb-keyword "GET-" x) ,x)) vars)
        ,@(mapcar #'(lambda (x) `(,(symb-keyword "SET-" x) (apply #'(lambda (input) (setf ,x input)) args))) vars)
        ,@(mapcar #'(lambda (x) `(,(car x) (apply #'(lambda ,@(cdr x)) args))) message-args-commands)
-       (t (error "Bad msg")))))
+       (t (error "Bad msg '~s' with args: ~s" msg args)))))
 
 ;;; walker stuff
 ;; Create a walker will all associated fields. Coverts data and errors to double float lists of vectors for efficiency of computation (speed, consistency, easy of use (keeps sequence structure)
@@ -256,13 +264,13 @@ Used as:
 ;; need to add list around data
 ;; need to remove matrix-list-of-vectors
 ;; need to make more general so these things don't need correcting
-(defun walker-init (&key fn data params (stddev 1) (log-liklihood #'log-liklihood-normal) (log-prior #'log-prior-flat) (init t))
+(defun walker-init (&key fn data params (stddev 1) (log-liklihood #'log-liklihood-normal) (log-prior #'log-prior-flat) (init t) &allow-other-keys)
   "Create a walker that can be used in walker-* functions to do fitting and other
 probabilistic analysis."
   (let* ((walker nil)
 	 (fn (force-list fn))
 	 (stddev (to-double-floats (clean-stddev stddev fn)))
-	 (data (to-double-floats (force-list data)))
+	 (data (to-double-floats (clean-data data fn)))
 	 (params (to-double-floats params))
 	 (log-liklihood (force-list log-liklihood))
 	 (log-prior (force-list log-prior))

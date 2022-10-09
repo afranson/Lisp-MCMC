@@ -5,21 +5,21 @@
 (defun data->guess-lorder-mixed-bg-params (data)
   (let ((x-data (elt data 0))
 	(y-data (elt data 1)))
-   (destructuring-bind (x-diff y-diff) (diff-list x-data y-data)
-     (let* ((center-pos (position (reduce #'max y-diff) y-diff))
-	    (center-pos (if center-pos center-pos (floor (length x-data) 2)))
-	    (center-x (elt x-diff center-pos))
-	    (center-y (elt y-data center-pos))
-	    (right-peak-pos (position 0 y-diff :test #'(lambda (x y) (> x y)) :start center-pos))
-	    (right-peak-pos (if right-peak-pos right-peak-pos (+ 1 (floor (length x-data) 2))))
-	    (right-peak-x (elt x-diff right-peak-pos))
-	    (right-peak-y (elt y-data right-peak-pos))
-	    (bg1 (/ (reduce #'+ y-diff) (length y-diff)))
-	    (bg0 (- center-y (* bg1 center-x)))
-	    (x-spacing (- (fifth x-data) (fourth x-data))))
-       (list :x0 center-x :linewidth (max (* 10 x-spacing) (* 2 (sqrt 3) (- right-peak-x center-x)))
-	     :scale (- right-peak-y center-y) :mix 0.1d0
-	     :bg0 bg0 :bg1 bg1)))))
+    (destructuring-bind (x-diff y-diff) (diff-vec x-data y-data)
+      (let* ((center-pos (position (reduce #'max y-diff) y-diff))
+	     (center-pos (if center-pos center-pos (floor (length x-data) 2)))
+	     (center-x (elt x-diff center-pos))
+	     (center-y (elt y-data center-pos))
+	     (right-peak-pos (position 0 y-diff :test #'(lambda (x y) (> x y)) :start center-pos))
+	     (right-peak-pos (if right-peak-pos right-peak-pos (+ 1 (floor (length x-data) 2))))
+	     (right-peak-x (elt x-diff right-peak-pos))
+	     (right-peak-y (elt y-data right-peak-pos))
+	     (bg1 (/ (reduce #'+ y-diff) (length y-diff)))
+	     (bg0 (- center-y (* bg1 center-x)))
+	     (x-spacing (- (elt x-data 5) (elt x-data 4))))
+	(list :x0 center-x :linewidth (max (* 10 x-spacing) (* 2 (sqrt 3) (- right-peak-x center-x)))
+	      :scale (- right-peak-y center-y) :mix 0.1d0
+	      :bg0 bg0 :bg1 bg1)))))
 
 (defun log-liklihood-lorder (fn params data error)
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
@@ -111,17 +111,18 @@
     (min y-start-std-dev y-end-std-dev)))
 
 
-(defun lorder-mixed-bg-walker (data error &optional params)
-  (unless params (setq params (data->guess-lorder-mixed-bg-params data)))
-  (walker-init :fn #'lorder-mixed-bg
-	       :data data
-	       :params params
-	       :stddev error
-	       :log-liklihood #'log-liklihood-normal
-	       :log-prior #'log-prior-lorder-mixed))
+(defun lorder-mixed-bg-walker (&key data stddev (rows '(1 4)) params)
+  (let* ((data (apply #'create-walker-data data rows)))
+    (unless params (setq params (data->guess-lorder-mixed-bg-params (elt data 0))))
+    (walker-init :fn #'lorder-mixed-bg
+		 :data data
+		 :params params
+		 :stddev stddev
+		 :log-liklihood #'log-liklihood-normal
+		 :log-prior #'log-prior-lorder-mixed)))
 
 
- 
+
 
 (defun file->lorder-walker-easy (filename &key (walker-function #'lorder-mixed-bg-walker) (conditioning-function #'lorder-conditioning) params)
   (let* ((data (file->data-list filename))
