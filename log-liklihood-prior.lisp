@@ -18,7 +18,7 @@
 		   (param-name-bound (read-from-string (concatenate 'string (symbol-name key) "-bound"))))
 	       `(,param-name-bound (the double-float (if (< ,low-expr ,param-name ,high-expr)
 					0d0
-					(* -1d100 (- (exp (* (min (abs (- ,param-name ,high-expr)) (abs (- ,param-name ,low-expr))) 1d-5)) 1))))))))
+					(* -1d10 (- (exp (* (min (abs (- ,param-name ,high-expr)) (abs (- ,param-name ,low-expr))) 1d-5)) 1))))))))
 	 (get-bound-name (key-low-high)
 	   (destructuring-bind (key low-expr high-expr) key-low-high
 	     (declare (ignore low-expr high-expr))

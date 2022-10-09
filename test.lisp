@@ -6,16 +6,17 @@
 
 (in-package :mcmc-fitting)
 
-(defparameter data (file->data-list "example-data.xls"))
+;; try with data as the name, maybe breaks things?
+(defparameter dat (file->data-list "example-data.xls"))
 
 (walker-create woi
 	       :fn #'lorder-mixed-bg
-	       :data (list (list (make-array (length (elt data 1)) :initial-contents (elt data 1)) (make-array (length (elt data 4)) :initial-contents (elt data 4))))
-	       :params '(:scale 4d-6 :linewidth 70d0 :x0 2800d0 :mix 0d0 :bg0 1d-9 :bg1 1d-10)
-	       :stddev '(1d-7)
+	       :data (list (list (make-array (length (elt dat 1)) :initial-contents (elt dat 1)) (make-array (length (elt dat 4)) :initial-contents (elt dat 4))))
+	       :params '(:scale 1d-9 :linewidth 7 :x0 1400 :mix 0.9 :bg0 1d-7 :bg1 1d-9)
+	       :stddev 1d-7
 	       :log-liklihood #'log-liklihood-normal
-	       :log-prior #'log-prior-flat)
+	       :log-prior #'log-prior-lorder-mixed)
 
 (walker-adaptive-steps woi)
 
-;;; errors concerning the depth of the data in the log-liklihood-normal function
+;; 6.26 

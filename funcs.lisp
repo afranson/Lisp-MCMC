@@ -30,18 +30,27 @@
 
 
 ;;; Lorentzians
+(declaim (inline lorentzian-i))
 (defun lorentzian-i (x &key scale linewidth x0 &allow-other-keys)
   "Imaginary part of lorentzian response function, the absorption part"
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
+	   (double-float x scale linewidth x0))
   (let ((numer (* scale linewidth x))
 	(denom (+ (expt (* x linewidth) 2) (expt (- (expt x 2) (expt x0 2)) 2))))
     (/ numer denom)))
 
+(declaim (inline lorentzian-r))
 (defun lorentzian-r (x &key scale linewidth x0 &allow-other-keys)
   "Real part of lorentzian response function, the phase part"
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
+	   (double-float x scale linewidth x0))
   (let ((numer (* scale (- (expt x0 2) (expt x 2))))
 	(denom (+ (expt (* x linewidth) 2) (expt (- (expt x 2) (expt x0 2)) 2))))
     (+ 1d0 (/ numer denom))))
 
+(declaim (inline lorder-i))
 (defun lorder-i (x &key scale linewidth x0 &allow-other-keys)
   "Derivative of lorentzian absorption function"
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
@@ -53,6 +62,7 @@
 	 (denom (expt (+ (expt (* x linewidth) 2) (expt sq-diff 2)) 2)))
     (/ numer denom)))
 
+(declaim (inline lorder-r))
 (defun lorder-r (x &key scale linewidth x0 &allow-other-keys)
   "Derivative of lorentzian phase function"
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
@@ -64,6 +74,7 @@
 	 (denom (expt (+ (expt (* x linewidth) 2) (expt sq-diff 2)) 2)))
     (/ numer denom)))
 
+(declaim (inline double-lorentzian-bg))
 (defun double-lorentzian-bg (x &key scale1 scale2 mu1 mu2 sigma bg0 &allow-other-keys)
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
 	   (optimize speed)
@@ -72,6 +83,7 @@
      (the double-float (lorentzian-i x :scale scale1 :x0 mu1 :linewidth sigma))
      (the double-float (lorentzian-i x :scale scale2 :x0 mu2 :linewidth sigma))))
 
+(declaim (inline lorder-mixed))
 (defun lorder-mixed (x &key scale linewidth x0 mix &allow-other-keys)
   "Combination of lorder-i and lorder-r with a cosine-like mixing of the two"
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
@@ -80,6 +92,7 @@
   (+ (* (cos mix) (the double-float (lorder-i x :scale scale :linewidth linewidth :x0 x0)))
      (* (sin mix) (the double-float (lorder-r x :scale scale :linewidth linewidth :x0 x0)))))
 
+(declaim (inline lorder-mixed-bg))
 (defun lorder-mixed-bg (x &key scale linewidth x0 mix (bg0 0d0) (bg1 0d0) &allow-other-keys)
   "Combination of lorder-i and lorder-r with a cosine-like mixing of the two also with constant and linear background terms"
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)

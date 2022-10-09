@@ -112,7 +112,7 @@
 
 
 (defun lorder-mixed-bg-walker (data error &optional params)
-  (unless params (setq params (data->guess-lorder-mixed-bg-params (map-matrix #'(lambda (x) (float x 1.0d0)) data))))
+  (unless params (setq params (data->guess-lorder-mixed-bg-params data)))
   (walker-init :fn #'lorder-mixed-bg
 	       :data data
 	       :params params
