@@ -1,3 +1,9 @@
+;;; mcmc-fitting.lisp
+#|
+create walker
+advance it
+visualize it
+|#
 ;;; Trying to figure out how to do some basic data analysis in lisp
 ;;; Need to:
 ;;;  Read data into array - read x lines in info, the rest into data, handle empty lines
@@ -19,10 +25,31 @@
 ;; (ql:quickload :gsll)
 ;; (ql:quickload :antik)
 
+#| For testing cholesky decomps vs gsl implementation
+(defun eyes (n)
+  (do ((i 0 (1+ i))
+       (ret-array nil (push (do ((j 0 (1+ j))
+				 (ret-list nil (push (if (= i j) 1 0) ret-list)))
+				((> j n) (reverse ret-list)))
+			    ret-array)))
+      ((> i n) (reverse ret-array))))
+
+(defun matrix-add (mat1 mat2)
+  (let ((ret-mat nil))
+    (dolist (erc (mapcar #'list mat1 (transpose-matrix mat2)) (reverse ret-mat))
+      (push (mapcar #'+ (elt erc 0) (elt erc 1)) ret-mat))))
+
+(defparameter randmat (repeat 3 (repeat 3 (random 10d0))))
+(defparameter posdefmat (matrix-add (scale-matrix 10 (eyes 3)) (scale-matrix 0.5 (matrix-add randmat randmat))))
+|#
+
 (in-package :mcmc-fitting)
+
+
 
 ;;; data manipulation
 (defun diff-list (x-data y-data)
+  "Returns two lists, the first is the center points of x-data, the second is the slopes."
   (labels ((avg-x-values (x-data)
 	     (/ (+ (car x-data) (cadr x-data)) 2))
 	   (diff-y (x-data y-data)
@@ -55,55 +82,9 @@
 	(list return-x-vec return-y-vec))))
 
 
-;;; Stats
-(defun multivariate-gaussian-random (covs)
-  (mapcar #'(lambda (x) (* x (alexandria:gaussian-random))) covs))
 
-(defun nth-percentile (n sequence &optional (sorted nil))
-  (let* ((copy sequence)
-	 (len (length sequence))
-	 (n (* n (- len 1) 1/100)))
-    (multiple-value-bind (pos rem) (floor n)
-      (unless sorted
-	(setq copy (sort (copy-seq sequence) #'<)))
-      (if (= rem 0)
-	  (elt copy pos)
-	  (let ((e1 (elt copy pos))
-		(e2 (elt copy (+ pos 1))))
-	    (/ (+ e1 e2) 2))))))
-
-(defun 95cr (sequence)
-  (list (nth-percentile 2.5 sequence) (nth-percentile 97.5 sequence)))
-
-(defun iqr (sequence &optional (sorted nil))
-  (unless sorted (setq sorted (sort (copy-seq sequence) #'<)))
-  (- (nth-percentile 75 sequence t) (nth-percentile 25 sequence t)))
-
-(defun median (sequence &optional sorted)
-  (nth-percentile 50 sequence sorted))
-
-(defun mean (sequence)
-  (/ (reduce #'+ sequence) (length sequence)))
-
-(defun variance (sequence)
-  (let* ((mean (/ (reduce #'+ sequence) (length sequence)))
-	 (sum-sq (reduce #'+ (map 'list #'(lambda (x) (expt (- x mean) 2)) sequence))))
-    (/ sum-sq (- (length sequence) 1))))
-
-(defun standard-deviation (sequence)
-  (sqrt (variance sequence)))
-
-(defun standard-deviation-normal (sequence &optional sorted)
-  (let* ((copy sequence))
-    (unless sorted
-      (setq copy (sort (copy-seq sequence) #'<)))
-    (let ((middle-value (median copy t))
-	  (upper-variance (nth-percentile 84.1 copy t)))
-      (- upper-variance middle-value))))
-
-(defun variance-normal (sequence &optional sorted)
-  (expt (standard-deviation-normal sequence sorted) 2))
-
+;; Get the generalized sqrt of the variance (get the standard deviation of a multivariate covariance)
+;; 5x faster than gsl implementation
 (defun cholesky-decomp (covariance-matrix)
   (let* ((cov-array (make-array (list (length covariance-matrix) (length (car covariance-matrix))) :initial-contents covariance-matrix))
 	 (l-array (make-array (array-dimensions cov-array) :initial-element 0d0))
@@ -114,48 +95,9 @@
 	(dotimes (j k)
 	  (incf tmp-sum (* (aref l-array i j) (aref l-array k j))))
 	(if (= i k)
-	    (setf (aref l-array i k) (sqrt (abs (- (aref cov-array i k) tmp-sum)))) ; TODO remove abs
+	    (setf (aref l-array i k) (sqrt (- (aref cov-array i k) tmp-sum)))
 	    (setf (aref l-array i k) (/ (- (aref cov-array i k) tmp-sum) (aref l-array k k))))))
     (array-matrix l-array)))
-
-
-
-
-;;; plist functions
-(defun get-plist-keys (plist &optional return-keys)
-  (if (car plist)
-      (get-plist-keys (cddr plist) (cons (car plist) return-keys))
-      (reverse return-keys)))
-
-(defun get-plist-values (plist &optional return-values)
-  (if (car plist)
-      (get-plist-values (cddr plist) (cons (cadr plist) return-values))
-      (reverse return-values)))
-
-(defun make-plist (keys values &optional return-plist)
-  (if (and (nthcdr 0 keys) (nthcdr 0 values))
-      (make-plist (cdr keys) (cdr values) (nconc (list (car values) (car keys)) return-plist))
-      (reverse return-plist)))
-
-(defun reduce-plists (function plist1 plist2 &optional result)
-  (if (and (cadr plist1) (cadr plist2))
-      (let ((key (car plist1)))
-	(reduce-plists function (cddr plist1)
-		       plist2
-		       (nconc (list (funcall function (cadr plist1) (getf plist2 key)) key) result)))
-      (reverse result)))
-
-(defun map-plist (fn plist)
-  (let* ((keys (get-plist-keys plist))
-	 (values (get-plist-values plist))
-	 (ret-values (mapcar fn values)))
-    (make-plist keys ret-values)))
-
-(defun scale-plist (scale plist)
-  (map-plist #'(lambda (x) (* x scale)) plist))
-
-
-
 
 
 ;;; matrix and covariance
@@ -216,7 +158,7 @@
 
 (defun transpose-matrix (matrix)
   (let ((num-columns (- (length (elt matrix 0)) 1)))
-    (mapcar #'(lambda (el) (mapcar #'(lambda (row) (elt row el)) matrix)) (linspace 0 num-columns))))
+    (mapcar #'(lambda (el) (mapcar #'(lambda (row) (elt row el)) matrix)) (up-to num-columns))))
 
 (defun lplist-to-l-matrix (lplist)
   (let* ((covariance (lplist-covariance lplist)))
@@ -249,108 +191,7 @@
 (defvar example-l-matrix (lplist-to-l-matrix example-lplist))
 
 
-
-
-
-;;; binning / histogram
-(defun make-histo (sequence &optional num-bins)
-  (let* ((bottom (reduce #'min sequence))
-	 (top (reduce #'max sequence))
-	 (num-bins (if num-bins num-bins (floor (* (- top bottom) (expt (length sequence) 1/3)) (* 2 (iqr sequence)))))
-	 (num-bins (+ 1 num-bins))
-	 (boundaries (linspace bottom top :steps num-bins)))
-    (labels ((count-for-bins (n sequence &optional return-list)
-	       (if (< n num-bins)
-		   (let ((pos (position (elt boundaries n) sequence :test-not #'>=)))
-		     (unless pos
-		       (setq pos (length sequence)))
-		     (count-for-bins (+ n 1)
-				     (subseq sequence pos)
-				     (cons pos return-list)))
-		   (reverse return-list))))
-      (count-for-bins 1 sequence))))
-
-(defun make-histo-x (sequence &optional num-bins)
-  (let* ((bottom (reduce #'min sequence))
-	 (top (reduce #'max sequence))
-	 (num-bins (if num-bins num-bins (floor (* (- top bottom) (expt (length sequence) 1/3)) (* 2 (iqr sequence)))))
-	 (gap-size (/ (- top bottom) num-bins)))
-    (linspace (+ bottom (/ gap-size 2)) top :step-size gap-size)))
-
-
-
-
 ;;; MCMC Metropolis-Hastings
-(defun log-prior-flat (params data)
-  (declare (ignore params data))
-  0d0)
-
-(defmacro prior-bounds-let ((&rest keys-low-high) &body body)
-  (flet ((expand-keys (key-low-high)
-	   (let* ((key (car key-low-high))
-		  (param-name (read-from-string (symbol-name key))))
-	     `(,param-name (the double-float (getf params ,key 0d0)))))
-	 (expand-bounds (key-low-high)
-	   (destructuring-bind (key low-expr high-expr) key-low-high
-	     (let ((param-name (read-from-string (symbol-name key)))
-		   (param-name-bound (read-from-string (concatenate 'string (symbol-name key) "-bound"))))
-	       `(,param-name-bound (the double-float (if (< ,low-expr ,param-name ,high-expr)
-					0d0
-					(* -1d100 (- (exp (* (min (abs (- ,param-name ,high-expr)) (abs (- ,param-name ,low-expr))) 1d-5)) 1))))))))
-	 (get-bound-name (key-low-high)
-	   (destructuring-bind (key low-expr high-expr) key-low-high
-	     (declare (ignore low-expr high-expr))
-	     (let ((param-name-bound (read-from-string (concatenate 'string (symbol-name key) "-bound"))))
-	       param-name-bound))))
-    `(let* (,@(mapcar #'expand-keys keys-low-high)
-	    ,@(mapcar #'expand-bounds keys-low-high)
-	    (bounds-total (+ ,@(mapcar #'get-bound-name keys-low-high))))
-       ,@body)))
-
-;; log-liklihood can depend on x, y, params, error (additional distribution parameters)
-;; in this case, it is just log normal (need x and y and mu (func x) and sigma)
-;; in other cases, it could be log poisson (need lambda (func y) and k (y)) (no x, no sigma)
-(defun log-normal (x mu sigma)
-  (declare (optimize speed)
-	   (double-float mu x)
-	   (type (double-float 0d0 *) sigma))
-  (+ (* -1/2 (log (* 2 pi))) (* -1 (log sigma)) (* -1/2 (expt (/ (- x mu) sigma) 2.0))))
-
-(defun log-factorial (n)
-  (reduce #'(lambda (x y) (+ x (log y))) (linspace 0 n :step-size 1)))
-
-(defun log-poisson (lambda k)
-  (- (* k (log lambda)) lambda (log-factorial k)))
-
-;; log liklihood is the function that determines how data is useful
-;; It does the pattern matching and analysis on input variables
-;; The liklihood defines the result
-;; Each independent variable needs to have the appropriate distribution
-;; Then they just all add together (for the log version)
-;; The prior is then takked on at the end however the user sees fit
-;; Since the prior does not change, it will just speed up the convergence to have a good one
-;; prior could also depend on data, generally for bounds or such
-(defun create-log-liklihood-normal-weighted (fn params data error data-column-x data-column-y)
-  (declare (optimize speed)
-	   (cons data)
-	   (function fn)
-	   (simple-vector error))
-  (let* ((x (elt data data-column-x))
-	 (y (elt data data-column-y))
-	 (error (if (= 1 (length error)) (make-array (length x) :initial-element (elt error 0)) error)))
-    (declare (simple-vector x y error))
-    (reduce #'+ (map 'vector #'(lambda (x y z) (log-normal y (apply fn x params) z)) x y error))))
-
-(defun log-liklihood-normal (fn params data error)
-  (create-log-liklihood-normal-weighted fn params data error 0 1))
-
-
-;; (defun matrix-list-of-vectors (matrix)
-;;   (cond ((numberp matrix) (error "Too few elements in matrix, looking at ~s." matrix))
-;; 	((atom matrix) matrix)
-;; 	((numberp (car matrix)) (make-array (length matrix) :initial-contents (mapcar #'(lambda (x) (float x 1.0d0)) matrix)))
-;; 	(t (mapcar #'matrix-list-of-vectors matrix))))
-
 (defun force-list (item)
   (if (or (consp item) (arrayp item))
       item
@@ -365,7 +206,7 @@
     (mapcar #'(lambda (res fn) (if (numberp res) fn res)) results log-liklihood)))
 
 
-(defun error-clean (item)
+(defun stddev-clean (item)
   (cond ((numberp item)
 	 (list (make-array 1 :initial-element (float item 0d0)))) ; just a single number
 	((vectorp item)
@@ -379,26 +220,7 @@
 	 (mapcar #'(lambda (x) (map 'vector #'(lambda (y) (float y 0d0)) x)) item))))
 ; (mapcar #'error-clean '(4 #(1 2 3) (#(1 2) #(4 5)) (1 2 3) ((1 2 3) (4 5 6))))
 
-;; (defun data-proper-depth (item)
-;;   (cond ((numberp (car item)) (list item))
-;; 	((numberp (caar item)) (list item))
-;; 	((consp (caar item)) item)
-;; 	(t item)))
 
-(defmacro n-apply (x &rest functions)
-  (let ((gx (gensym)))
-    `(let ((,gx ,x))
-       (mapcar #'(lambda (f) (funcall f ,gx)) ',functions))))
-
-(defun s-combinator (f g x)
-  (funcall #'(lambda (a) (funcall f x a)) (funcall g x)))
-
-(defun p-combinator (f h g x)
-  (funcall #'(lambda (a) (funcall f (funcall h x) a)) (funcall g x)))
-
-(defun k-combinator (x y)
-  (declare (ignore y))
-  x)
 
 ; list of data sets = list of list of vectors
 (defun data-clean (item)
@@ -411,34 +233,47 @@
 	((or (consp (caaar item)) (vectorp (caaar item))) ; list/vector in a list in a list in a list (x's and y's are lists, not just numbers)
 	 (mapcar #'(lambda (x) (mapcar #'(lambda (y) (mapcar #'(lambda (z) (map 'vector #'(lambda (a) (float a 0d0)) z)) y)) x)) item))))
 
+
+(defmacro lambda-get-set-etc ((&rest vars) &rest message-args-commands)
+  "Creates :set-var and :get-var functions for a let-over-lambda construct and allows for further messages as well.
+
+Used as:
+(lamda-get-set-etc
+   (var1 var2 var3) ; these all receive get-var and set-var methods
+   (:key-value0 (args0) (function0 ...))
+   (:key-value1 (args1) (function1 ...))
+   ...)"
+  `(lambda (msg &rest args)
+     (case msg
+       ,@(mapcar #'(lambda (x) `(,(symb-keyword "GET-" x) ,x)) vars)
+       ,@(mapcar #'(lambda (x) `(,(symb-keyword "SET-" x) (apply #'(lambda (input) (setf ,x input)) args))) vars)
+       ,@(mapcar #'(lambda (x) `(,(car x) (apply #'(lambda ,@(cdr x)) args))) message-args-commands)
+       (t (error "Bad msg")))))
+
 ;;; walker stuff
 ;; Create a walker will all associated fields. Coverts data and errors to double float lists of vectors for efficiency of computation (speed, consistency, easy of use (keeps sequence structure)
 ;; assumes fully list inputs
 
+;; TODO name value cells for easier inspection of the closure
 ;; need to add list around data
 ;; need to remove matrix-list-of-vectors
 ;; need to make more general so these things don't need correcting
-(defun create-walker (fn params data error log-liklihood log-prior &key (init t))
+(defun walker-init (&key fn data params (stddev 1) (log-liklihood #'log-liklihood-normal) (log-prior #'log-prior-flat) (init t))
   "Create a walker that can be used in walker-* functions to do fitting and other
 probabilistic analysis."
   (let* ((walker nil)
 	 (fn (force-list fn))
 	 (log-liklihood (force-list log-liklihood))
 	 (log-prior (force-list log-prior))
-	 (error (error-clean error))
-;	 (error (if (= 1 (length fn)) (error-proper-depth error) error))
-;	 (error (mapcar #'matrix-list-of-vectors error))
-;n	 (data (if (= 1 (length fn)) (list (data-proper-depth data)) data))
-	 ; (data (mapcar #'matrix-list-of-vectors data))
+	 (stddev (stddev-clean stddev))
 	 (data (data-clean data))
 	 (log-prior (log-prior-fixer log-prior params data))
-	 (log-liklihood (log-liklihood-fixer log-liklihood fn params data error))
-	 (param-keys (get-plist-keys params))
-	 (walker-context (make-plist '(:fn :param-keys :data :error :log-liklihood :log-prior) (list fn param-keys data error log-liklihood log-prior))))
+	 (log-liklihood (log-liklihood-fixer log-liklihood fn params data stddev))
+	 (param-keys (get-plist-keys params)))
     (if (not (= (length fn) (length log-liklihood) (length log-prior)))
-	(error "fn, log-liklihood, and log-prior need to have the same number of elements, either 1 (scalars) or lists of n items. Currently ~s, ~s, and ~s." fn log-liklihood log-prior))
+	(format uiop:*stderr* "fn, log-liklihood, and log-prior need to have the same number of elements, either 1 (scalars) or lists of n items. Currently ~s, ~s, and ~s." fn log-liklihood log-prior))
     (labels ((make-step (params)
-	       (let* ((prob (+ (reduce #'+ (mapcar #'(lambda (ll f d e) (funcall ll f params d e)) log-liklihood fn data error))
+	       (let* ((prob (+ (reduce #'+ (mapcar #'(lambda (ll f d e) (funcall ll f params d e)) log-liklihood fn data stddev))
 			       (reduce #'+ (mapcar #'(lambda (lp d) (funcall lp params d)) log-prior data)))))
 		 (list (list :prob prob :params params))))
 	     (init-walker (&optional init-params)
@@ -450,32 +285,38 @@ probabilistic analysis."
 		     log-prior nil
 		     params nil
 		     data nil
-		     error nil
+		     stddev nil
 		     walker nil
-		     param-keys nil
-		     walker-context nil)))
+		     param-keys nil)))
       ;; initialize the walker
       (when init
 	(init-walker))
-      (lambda (msg &rest args)
-	(case msg
-	  (:get-context walker-context)
-	  (:set-error (setq error (car args)))
-	  (:get-walker walker)
-	  (:get-last-walk (car walker))
-	  (:burn-walks (nbutlast walker (car args)))
-	  (:remove-recents (setf walker (subseq walker (car args))))
-	  (:reset-walker (init-walker (car args)))
-	  (:empty-walker (delete-walker))
-	  (:make-step (make-step (car args)))
-	  (:add-step (setq walker (let ((r (random 50000))) (if (and (= r 1) (> (length walker) 200000)) (setq walker (subseq walker 0 100000))) (nconc (car args) walker)))))))))
+      (lambda-get-set-etc
+	  (walker fn data params stddev log-liklihood log-prior)
+	  (:get-last-walk () (car walker))
+	  (:burn-walks (n) (nbutlast walker n))
+	  (:remove-recents (n) (setf walker (subseq walker n)))
+	  (:reset-walker (init-params) (init-walker init-params))
+	  (:empty-walker () (delete-walker))
+	  (:make-step (params) (make-step params))
+	  (:add-step (step) (setq walker (nconc step walker)))))))
 
-;;; Functions that act on the walker closure ;; primitives
+(defmacro walker-create (name &rest rest &key fn data params (stddev 1) (log-liklihood #'log-liklihood-normal) (log-prior #'log-prior-flat) (init t) (docstring ""))
+  "Generates a walker with 'name' that can be called as (name msg arg ...) to perform the 'msg' command or used a variable name in functions."
+  (declare (ignorable fn data params stddev log-liklihood log-prior init))
+  `(progn
+     (defparameter ,name (apply #'walker-init (list ,@rest)) ,docstring)
+     (setf (symbol-function ',name) ,name)))
+
+;; Calling the inner methods of the closure are as simple as (name :msg args)
+
+
+;;; Functions that act on the walker closure ;; primitives for namespace convenience
 (defun walker-get (the-walker &optional take)
   (subseq (funcall the-walker :get-walker) 0 (when take (floor take))))
 
-(defun walker-set-error (the-walker error)
-  (funcall the-walker :set-error error))
+(defun walker-get-param-keys (the-walker)
+  (get-plist-keys (funcall the-walker :get-params)))
 
 (defun walker-get-last-walk (the-walker)
   (funcall the-walker :get-last-walk))
@@ -492,35 +333,16 @@ probabilistic analysis."
 (defun walker-delete (the-walker)
   (funcall the-walker :empty-walker))
 
-(defun walker-get-context (the-walker)
-  (funcall the-walker :get-context))
-
 (defun walker-make-step (the-walker params)
   (funcall the-walker :make-step params))
 
 (defun walker-add-walks (the-walker walk-list)
   (funcall the-walker :add-step walk-list))
 
-(defun walker-dry-step (the-walker &optional l-matrix (temperature 1))
-  "The one that uses a full covariance matrix"
-  (if (null l-matrix) (setq l-matrix (diagonal-covariance (get-plist-values (scale-plist 1e-2 (walker-get-median-params the-walker 1000))))))
-  (let* ((previous-walk (walker-get-last-walk the-walker))
-	 (prob0 (print (getf previous-walk :prob)))
-	 (previous-params (print (getf previous-walk :params)))
-	 (cov-values (get-covariant-sample (get-plist-values previous-params) l-matrix))
-	 (next-params (print (make-plist (get-plist-keys previous-params) cov-values)))
-	 (next-walk (car (walker-make-step the-walker next-params)))
-	 (prob1 (print (getf next-walk :prob)))
-	 (accepted-step (if (or (> prob1 prob0)
-				(> (/ (- prob1 prob0) temperature) (log (random 1.0d0))))
-			    (list next-walk)
-			    (list previous-walk))))
-    (print accepted-step)))
-
 (defun walker-step (the-walker &optional l-matrix (temperature 1))
   "The one that uses a full covariance matrix"
   (if (null l-matrix) (setq l-matrix (diagonal-covariance (get-plist-values (scale-plist 1e-2 (walker-get-median-params the-walker 1000))))))
-  (let* ((previous-walk (walker-get-last-walk the-walker))
+  (let* ((previous-walk (funcall the-walker :get-last-walk))
 	 (prob0 (getf previous-walk :prob))
 	 (previous-params (getf previous-walk :params))
 	 (cov-values (get-covariant-sample (get-plist-values previous-params) l-matrix))
@@ -556,8 +378,7 @@ probabilistic analysis."
   (mapcar #'(lambda (x) (getf x :params)) (walker-get the-walker take)))
 
 (defun walker-get-median-params (the-walker &optional take)
-  (let* ((context (walker-get-context the-walker))
-	 (param-keys (getf context :param-keys)))
+  (let* ((param-keys (walker-get-param-keys the-walker)))
     (make-plist
      param-keys
      (mapcar #'(lambda (x) (median (walker-get-param the-walker x take))) param-keys))))
@@ -590,8 +411,7 @@ probabilistic analysis."
   (lplist-to-l-matrix (diff-lplist (walker-remove-failed-walks the-walker take))))
 
 (defun walker-get-stddev-params (the-walker &optional take)
-  (let* ((context (walker-get-context the-walker))
-	 (param-keys (getf context :param-keys)))
+  (let* ((param-keys (walker-get-param-keys the-walker)))
     (if (< (walker-get-length the-walker) 10)
 	(make-plist param-keys (make-list (length param-keys) :initial-element 0d0))
 	(let ((l-matrix (walker-get-l-matrix the-walker take)))
@@ -599,7 +419,7 @@ probabilistic analysis."
 	   param-keys
 	   (mapcar #'(lambda (x)
 		       (elt (elt l-matrix x) x))
-		   (linspace 0 (- (length l-matrix) 1) :step-size 1)))))))
+		   (up-to (1- (length l-matrix)))))))))
 
 (defun walker-get-acceptance (the-walker &optional take)
   (let* ((probs (walker-get-probs the-walker take))
@@ -608,9 +428,9 @@ probabilistic analysis."
 
 
 (defun walker-adaptive-steps-full (the-walker &optional (n 100000) (temperature 1d6) (auto t) l-matrix)
-  (let* ((param-keys (getf (walker-get-context the-walker) :param-keys))
+  (let* ((param-keys (walker-get-param-keys the-walker))
 	 (temp-steps 10000)
-	 (temps (linspace temperature 1 :steps temp-steps))
+	 (temps (linspace temperature 1 :num temp-steps))
 	 (temp-temps (copy-seq temps))
 	 (current-acceptance 0))
     (flet ((stable-probs-p (probs)
@@ -630,7 +450,7 @@ probabilistic analysis."
 		    (> i 40000)
 		    (< 0.2 (walker-get-acceptance the-walker 1000) 0.5)
 		    (stable-probs-p (walker-get-probs the-walker 2000)))))
-	;; catch complex error and retry with differnt opimal l matrix sampling
+	;; catch complex stddev and retry with differnt opimal l matrix sampling
 	(walker-step the-walker l-matrix temperature)
 	;; Annealing
 	(when (and (= 0 (mod (floor i temp-steps) 2)) (< i (* temp-steps 95)))
@@ -650,11 +470,11 @@ probabilistic analysis."
   (walker-adaptive-steps-full the-walker n 1d6 t nil))
 
 (defun walker-get-data-column (the-walker column &optional (data-set 0))
-  (elt (elt (getf (walker-get-context the-walker) :data) data-set) column))
+  (elt (elt (funcall the-walker :get-data) data-set) column))
 
 
 (defun walker-catepillar-plots (the-walker &optional take)
-  (let* ((param-keys (getf (walker-get-context the-walker) :param-keys))
+  (let* ((param-keys (walker-get-param-keys the-walker))
 	 (n (length param-keys)))
     (vgplot:close-all-plots)
     (vgplot:format-plot t "reset")
@@ -681,14 +501,13 @@ probabilistic analysis."
     (vgplot:ylabel "Log Liklihood" :replot nil)
     (vgplot:plot probs ";Liklihood;w l")))
 
-(defun walker-fit-error-max-min (the-walker &key (take 1000) (x-column 0) (fn-number 0))
-  (let* ((context (walker-get-context the-walker))
-	 (fn (elt (getf context :fn) fn-number))
-	 (data (elt (getf context :data) fn-number))
+(defun walker-fit-stddev-max-min (the-walker &key (take 1000) (x-column 0) (fn-number 0))
+  (let* ((fn (elt (funcall the-walker :get-fn) fn-number))
+	 (data (elt (funcall the-walker :get-data) fn-number))
 	 (x-data (elt data x-column))
 	 (x-fit (linspace (elt x-data 0)
 			  (elt x-data (- (length x-data) 1))
-			  :steps 1000))
+			  :num 1000))
 	 (previous-walks (walker-get the-walker take))
 	 (all-ys (mapcar #'(lambda (x) (mapcar #'(lambda (walk) (apply fn x (getf walk :params))) previous-walks)) x-fit))
 	 (max-ys (mapcar #'(lambda (y) (reduce #'max y)) all-ys))
@@ -697,14 +516,13 @@ probabilistic analysis."
 
 (defun walker-plot-data-and-fit (the-walker &key (take 1000) (x-column 0) (y-column 1) (fn-number 0))
   (let* ((take (if (or (null take) (> take (walker-get-length the-walker))) (walker-get-length the-walker) take))
-	 (context (walker-get-context the-walker))
-	 (fn (elt (getf context :fn) fn-number))
-	 (data (elt (getf context :data) fn-number))
+	 (fn (elt (funcall the-walker :get-fn) fn-number))
+	 (data (elt (funcall the-walker :get-data) fn-number))
 	 (x-data (elt data x-column))
 	 (y-data (elt data y-column))
 	 (x-fit (linspace (elt x-data 0)
 			  (elt x-data (- (length x-data) 1))
-			  :steps 1000))
+			  :num 1000))
 	 (params (walker-get-median-params the-walker take))
 	 (y-fit (map 'vector #'(lambda (x) (apply fn x params)) x-fit))
 	 (previous-walks (walker-get the-walker take))
@@ -727,8 +545,7 @@ probabilistic analysis."
 ;; TODO Validate
 ;; (defun walker-plot-data-and-fit-only (the-walker &optional take (x-column 0) (y-column 1) (fn-number 0))
 ;;   (let* ((take (when take (if (> take (walker-get-length the-walker)) (walker-get-length the-walker) take)))
-;; 	 (context (walker-get-context the-walker))
-;; 	 (fn (getf context :fn))
+;; 	 (fn (funcall the-walker :get-fn))
 ;; 	 (fn (if (consp fn) (elt fn fn-number) fn))
 ;; 	 (data (getf context :data))
 ;; 	 (x-data (elt data x-column))
@@ -749,14 +566,15 @@ probabilistic analysis."
 ;;     params))
 
 (defun walker-plot-residuals (the-walker &key (take 1000) (x-column 0) (y-column 1) (fn-number 0))
-  (let* ((take (if (or (null take) (> take (walker-get-length the-walker))) (walker-get-length the-walker) take))
-	 (context (walker-get-context the-walker))
-	 (fn (elt (getf context :fn) fn-number))
-	 (data (elt (getf context :data) fn-number))
-	 (error (elt (getf context :error) fn-number))
+  (let* ((take (if (or (null take) (> take (walker-get-length the-walker)))
+		   (walker-get-length the-walker)
+		   take))
+	 (fn (elt (funcall the-walker :get-fn) fn-number))
+	 (data (elt (funcall the-walker :get-data) fn-number))
+	 (stddev (elt (funcall the-walker :get-stddev) fn-number))
 	 (x-data (elt data x-column))
 	 (y-data (elt data y-column))
-	 (error (if (= 1 (length error)) (make-array (length x-data) :initial-element (elt error 0)) error))
+	 (stddev (if (= 1 (length stddev)) (make-array (length x-data) :initial-element (elt stddev 0)) stddev))
 	 (params (walker-get-median-params the-walker take))
 	 (y-fit (map 'vector #'(lambda (x) (apply fn x params)) x-data))
 	 (y-residuals (map 'vector #'(lambda (yf y) (- yf y)) y-fit y-data)))
@@ -767,12 +585,11 @@ probabilistic analysis."
     (vgplot:xlabel "x-data" :replot nil)
     (vgplot:ylabel "y-data" :replot nil)
     (vgplot:plot x-data y-residuals ";residuals; w p pt 6 ps 2 lc rgb \"black\""
-		 x-data error ";point error; w p pt 2 ps 1 lc rgb \"red\""
+		 x-data stddev ";point stddev; w p pt 2 ps 1 lc rgb \"red\""
 		 x-data (make-array (length x-data) :initial-element 0) ";baseline; w l lc rgb \"red\"")))
 
 (defun walker-plot-data (the-walker &key (x-column 0) (y-column 1) (fn-number 0))
-  (let* ((context (walker-get-context the-walker))
-	 (data (elt (getf context :data) fn-number))
+  (let* ((data (elt (funcall the-walker :get-data) fn-number))
 	 (x-data (elt data x-column))
 	 (y-data (elt data y-column)))
     (vgplot:close-all-plots)
@@ -804,7 +621,7 @@ probabilistic analysis."
 
 ;; TODO only extract each parameter once
 (defun walker-all-2d-plots (the-walker &optional take)
-  (let* ((param-keys (getf (walker-get-context the-walker) :param-keys))
+  (let* ((param-keys (walker-get-param-keys the-walker))
 	 (key-pairs (permute-params param-keys))
 	 (len (- (length param-keys) 1))
 	 (walker (walker-remove-failed-walks the-walker take)))
@@ -846,11 +663,10 @@ probabilistic analysis."
     (vgplot:plot histo-x histo ";Histogram; w l")))
 
 (defun walker-construct-print-list (the-walker &optional take)
-  (let ((context (walker-get-context the-walker)))
-    `(:param-keys ,(getf context :param-keys)
-      :data ,(getf context :data)
-      :error ,(getf context :error)
-      :walker ,(walker-get the-walker take))))
+  `(:param-keys ,(walker-get-param-keys the-walker)
+    :data ,(funcall the-walker :get-data)
+    :stddev ,(funcall the-walker :get-stddev)
+    :walker ,(walker-get the-walker take)))
 
 (defun walker-save (the-walker filename &optional take)
   (with-open-file (out filename
@@ -865,10 +681,10 @@ probabilistic analysis."
     (with-standard-io-syntax
       (let* ((full (read in))
 	     (data (getf full :data))
-	     (error (getf full :error))
+	     (stddev (getf full :stddev))
 	     (walks (getf full :walker))
 	     (dummy-params (getf (elt walks 0) :params))
-	     (the-walker (create-walker fn dummy-params data error log-liklihood log-prior :init nil)))
+	     (the-walker (walker-init :fn fn :data data :params dummy-params :stddev stddev :log-liklihood log-liklihood :log-prior log-prior :init nil)))
 	(walker-add-walks the-walker walks)
 	the-walker))))
 
@@ -912,9 +728,9 @@ probabilistic analysis."
 		    (let* ((param-keys (getf x :param-keys))
 			   (dummy-params (make-plist param-keys (make-list (length param-keys) :initial-element 0.0d0)))
 			   (data (getf x :data))
-			   (error (getf x :error))
+			   (stddev (getf x :stddev))
 			   (walks (getf x :walker))
-			   (the-walker (create-walker fn dummy-params data error log-liklihood log-prior :init nil)))
+			   (the-walker (walker-init :fn fn :data data :params dummy-params :stddev stddev :log-liklihood log-liklihood :log-prior log-prior :init nil)))
 		      (walker-add-walks the-walker walks)
 		      the-walker))
 		full)))))
@@ -963,42 +779,6 @@ probabilistic analysis."
 ;;; End of walker functionality
 
 
-
-;;; Data extraction
-(defun 3d-plot-file (filename &key (map t))
-  (vgplot:format-plot t "reset")
-  (vgplot:format-plot t "set terminal qt size 1920,1080 linewidth 1 font \"Arial,16\"")
-  (vgplot:format-plot t "set ticslevel 0")
-  (vgplot:format-plot t "set pm3d depthorder")
-  (vgplot:format-plot t "set cblabel \"Field Offset (Oe)\"")
-  (if map
-      (vgplot:format-plot t "set view map")
-      (vgplot:format-plot t "unset view"))
-  (vgplot:format-plot t "unset key")
-  (vgplot:format-plot t "unset grid")
-  (vgplot:format-plot t "set pm3d at sb")
-  (vgplot:xlabel "X Pos" :replot nil)
-  (vgplot:ylabel "Y Pos" :replot nil)
-  (vgplot:zlabel "Field Offset (Oe)" :replot nil)
-  (vgplot:format-plot t (format nil "splot \"~a\" u 1:2:3 w pm3d" filename)))
-
-(defun 3d-plot-admr-file (filename &key (map t))
-  (vgplot:format-plot t "reset")
-  (vgplot:format-plot t "set terminal qt size 1920,1080 linewidth 1 font \"Arial,40\"")
-  (vgplot:format-plot t "set ticslevel 0")
-  (vgplot:format-plot t "set pm3d depthorder")
-  (vgplot:format-plot t "set cblabel \"Absorption (dB)\"")
-  (if map
-      (vgplot:format-plot t "set view map")
-      (vgplot:format-plot t "unset view"))
-  (vgplot:format-plot t "unset key")
-  (vgplot:format-plot t "unset grid")
-  (vgplot:format-plot t "set pm3d at sb")
-  (vgplot:xlabel "X Field (Oe)" :replot nil)
-  (vgplot:ylabel "Y Field (Oe)" :replot nil)
-  (vgplot:zlabel "S21 (a.u.)" :replot nil)
-  (vgplot:format-plot t (format nil "splot \"~a\" u 1:2:7 w pm3d, \"\" u (-1*$1):(-1*$2):8 w pm3d" filename)))
-
 (defun file->file-specs (filename &key (delim #\tab))
   "Tells the user various metrics about the file. Lines, header lines, data lines, data rows, data sets."
   (with-open-file (in filename :direction :input)
@@ -1044,10 +824,10 @@ If row based, set columns to nil"
 	    (transpose-matrix (reverse file-contents))
 	    (reverse file-contents))))))
 
-(defun file->walker (filename fn params error log-liklihood log-prior)
+(defun file->walker (filename fn params stddev log-liklihood log-prior)
   "Generic function to read file and create walker based on specifying all inputs"
   (let* ((data (file->data-list filename)))
-    (create-walker fn params data error log-liklihood log-prior)))
+    (walker-init :fn fn :data data :params params :stddev stddev :log-liklihood log-liklihood :log-prior log-prior :init nil)))
 
 
 (defun file->plot (filename &key (x-column 0) (y-column 1))
@@ -1079,16 +859,3 @@ If row based, set columns to nil"
   (uiop:run-program "feh ./temp.png -3 5"))
 
 ;; (defparameter gnuplot-stream (ltk:do-execute "gnuplot" nil))
-;; The difficult thing he takes care of is saving the data to a temporary file for plotting
-;; Just need to make it easy to do this in a customizable way
-;; Then you can just build plots from these files
-;; a 'plot' commands builds all its input, but isn't sent to the buffer until to file is
-;; 'execute'd.
-;; All other things (format changes, labels, etc) are written at they are recieved
-;; multiplot needs to be way better
-
-;; Could write all my own commands to gnuplot this way
-;; His wrapper is soo thin as to be nearly useless I think
-;; Would be more useful to be able to add plot with additionl plot commands
-;; then just make a catalogue of the most useful and helpful commands available
-

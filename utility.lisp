@@ -11,6 +11,16 @@
      (destructuring-bind (,@bindings) x
        ,@body)))
 
+(defun mkstr (&rest args)
+  (with-output-to-string (s)
+    (dolist (a args) (princ a s))))
+
+(defun symb (&rest args)
+  (values (intern (apply #'mkstr args))))
+
+(defun symb-keyword (&rest args)
+  (values (intern (apply #'mkstr args) :keyword)))
+
 (defun remove-consecutive-duplicates (sequence)
   (mapcon #'(lambda (x)
 	      (if (eql (car x) (cadr x)) nil (list (car x))))
@@ -26,14 +36,24 @@
 (defun elements-between (sequence start-value end-value)
   (remove-if-not #'(lambda (x) (<= start-value x end-value)) sequence))
 
-(defun linspace (start end &key steps (step-size 1))
-  (cond (steps (setq step-size (/ (- end start) (- steps 1d0))))
-	(step-size (setq steps (+ 1 (floor (- end start) step-size)))))
-  (let ((return-list nil))
-    (dotimes (i (- steps 1))
-      (push (+ start (* step-size i)) return-list))
-    (push end return-list)
-    (reverse return-list)))
+(defun linspace (start end &key (num 50))
+  (let ((step (/ (- end start) num)))
+    (do ((n 0 (1+ n))
+	 (ret (list start) (push (+ (car ret) step) ret)))
+	((= n num) (reverse ret)))))
+
+(defun n-nums (n)
+  (do ((m 0 (1+ m))
+       (l nil (push m l)))
+      ((= m n) (reverse l))
+    (declare (fixnum m))))
+
+(defun up-to (n &optional (start 0))
+  (assert (> n start))
+  (do ((m start (1+ m))
+       (l nil (push m l)))
+      ((= m (1+ n)) (reverse l))
+    (declare (fixnum m))))
 
 (defun diff (list)
   (mapcon #'(lambda (x) (if (nthcdr 1 x) (list (- (cadr x) (car x))) nil)) list))
@@ -80,3 +100,38 @@
 		 (reverse acc))))
     (inner-split string)))
 
+
+
+
+;;; plist functions
+(defun get-plist-keys (plist &optional return-keys)
+  (if (car plist)
+      (get-plist-keys (cddr plist) (cons (car plist) return-keys))
+      (reverse return-keys)))
+
+(defun get-plist-values (plist &optional return-values)
+  (if (car plist)
+      (get-plist-values (cddr plist) (cons (cadr plist) return-values))
+      (reverse return-values)))
+
+(defun make-plist (keys values &optional return-plist)
+  (if (and (nthcdr 0 keys) (nthcdr 0 values))
+      (make-plist (cdr keys) (cdr values) (nconc (list (car values) (car keys)) return-plist))
+      (reverse return-plist)))
+
+(defun reduce-plists (function plist1 plist2 &optional result)
+  (if (and (cadr plist1) (cadr plist2))
+      (let ((key (car plist1)))
+	(reduce-plists function (cddr plist1)
+		       plist2
+		       (nconc (list (funcall function (cadr plist1) (getf plist2 key)) key) result)))
+      (reverse result)))
+
+(defun map-plist (fn plist)
+  (let* ((keys (get-plist-keys plist))
+	 (values (get-plist-values plist))
+	 (ret-values (mapcar fn values)))
+    (make-plist keys ret-values)))
+
+(defun scale-plist (scale plist)
+  (map-plist #'(lambda (x) (* x scale)) plist))

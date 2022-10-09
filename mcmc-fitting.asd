@@ -5,10 +5,14 @@
   :description "MCMC-Based Library for Fitting Data"
   :author "Andrew Franson"
   :license "GPLv3"
-  :depends-on (:vgplot)
+  :depends-on (:vgplot
+	       :alexandria)
   :components ((:file "package")
 	       (:file "utility")
+	       (:file "stats")
 	       (:file "funcs")
+	       (:file "plotting-helpers")
+	       (:file "log-liklihood-prior")
                (:file "vector-mcmc")
 	       (:file "fmr-specific")
 	       (:file "nv-specific")))
@@ -19,5 +23,5 @@
 ;;   :author "Andrew Franson"
 ;;   :license "GPL"
 ;;   :depends-on (:mcmc-fitting :lisp-unit)
-;;   :components ((:file "package-test")
-;;                (:file "vgplot-test")))
+;;   :components ((:file "package")
+;;                (:file "test")))

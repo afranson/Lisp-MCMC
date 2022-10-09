@@ -19,7 +19,8 @@
     (reduce #'+ (map 'vector #'(lambda (x y) (log-normal (apply fn x params) error y)) x y))))
 
 (defun log-prior-nv (params data)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (ignore data))
   (prior-bounds-let ((:scale1 1d-5 1d1)
 		     (:scale2 1d-5 1d1)
@@ -47,12 +48,12 @@
     (list :scale1 scale :scale2 scale :mu1 2863d0 :mu2 2873d0 :sigma 10d0 :bg0 (float y-min 0d0))))
 
 (defun nv-walker (data)
-  (create-walker #'double-lorentzian-bg
-		 (guess-nv-params data)
-		 data
-		 (nv-data-std-dev data)
-		 #'log-liklihood-nv
-		 #'log-prior-nv))
+  (walker-init :fn #'double-lorentzian-bg
+	       :data data
+	       :params (guess-nv-params data)
+	       :stddev (nv-data-std-dev data)
+	       :log-liklihood #'log-liklihood-nv
+	       :log-prior #'log-prior-nv))
 
 (defun dir->nv-walkers (dir)
   (let ((walkers (mapcar #'nv-walker (nv-dir->data dir))))

@@ -6,19 +6,22 @@
 ;;; Background
 (defun bg (x &rest args &key (bg0 0d0) (bg1 0d0) (bg2 0d0) &allow-other-keys)
   "Generic background function of bg0 + bg1*x + bg2*x^2 + ..."
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x bg0 bg1 bg2))
-  (reduce #'+ (mapcar #'(lambda (a e) (declare (double-float a) (fixnum e)) (* a (expt x e))) (list bg0 bg1 bg2) (linspace 0 (length args) :step-size 1))))
+  (reduce #'+ (mapcar #'(lambda (a e) (declare (double-float a) (fixnum e)) (* a (expt x e))) (list bg0 bg1 bg2) (up-to (length args)))))
 
 
 ;;; Gaussians
 (defun gaussian (x &key scale mu sigma &allow-other-keys)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x mu sigma scale))
   (* scale (exp (- (expt (/ (- x mu) sigma) 2)))))
 
 (defun double-gaussian-bg (x &key scale mu1 mu2 sigma bg0 &allow-other-keys)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale mu1 mu2 sigma bg0))
   (+ (the double-float (bg x :bg0 bg0))
      (the double-float (gaussian x :scale scale :mu mu1 :sigma sigma))
@@ -41,7 +44,8 @@
 
 (defun lorder-i (x &key scale linewidth x0 &allow-other-keys)
   "Derivative of lorentzian absorption function"
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale linewidth x0))
   (let* ((sq-diff (- (expt x 2) (expt x0 2)))
 	 (scale-norm (* (* (expt linewidth 2) x0) -0.7698d0))
@@ -51,7 +55,8 @@
 
 (defun lorder-r (x &key scale linewidth x0 &allow-other-keys)
   "Derivative of lorentzian phase function"
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale linewidth x0))
   (let* ((sq-diff (- (expt x 2) (expt x0 2)))
 	 (scale-norm (* (* (expt linewidth 2) x0) -0.7698d0))
@@ -60,7 +65,8 @@
     (/ numer denom)))
 
 (defun double-lorentzian-bg (x &key scale1 scale2 mu1 mu2 sigma bg0 &allow-other-keys)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale1 scale2 mu1 mu2 sigma bg0))
   (+ (the double-float (bg x :bg0 bg0))
      (the double-float (lorentzian-i x :scale scale1 :x0 mu1 :linewidth sigma))
@@ -68,14 +74,16 @@
 
 (defun lorder-mixed (x &key scale linewidth x0 mix &allow-other-keys)
   "Combination of lorder-i and lorder-r with a cosine-like mixing of the two"
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale linewidth x0 mix))
   (+ (* (cos mix) (the double-float (lorder-i x :scale scale :linewidth linewidth :x0 x0)))
      (* (sin mix) (the double-float (lorder-r x :scale scale :linewidth linewidth :x0 x0)))))
 
 (defun lorder-mixed-bg (x &key scale linewidth x0 mix (bg0 0d0) (bg1 0d0) &allow-other-keys)
   "Combination of lorder-i and lorder-r with a cosine-like mixing of the two also with constant and linear background terms"
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (double-float x scale linewidth x0 mix bg0 bg1))
   (+ (the double-float (lorder-mixed x :scale scale :linewidth linewidth :x0 x0 :mix mix))
      (the double-float (bg x :bg0 bg0 :bg1 bg1))))

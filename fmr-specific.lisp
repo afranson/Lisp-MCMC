@@ -22,7 +22,8 @@
 	     :bg0 bg0 :bg1 bg1)))))
 
 (defun log-liklihood-lorder (fn params data error)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (cons data)
 	   (function fn))
   (let* ((x0 (getf params :x0))
@@ -37,7 +38,8 @@
     (reduce #'+ (map 'vector #'(lambda (x y) (log-normal (apply fn x params) error y)) x y))))
 
 (defun log-prior-lorder (params data)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (cons data)
 	   (ignore params))
   (let ((x (elt data 0))
@@ -56,7 +58,8 @@
 	  bounds-total)))))
 
 (defun log-prior-lorder-mixed (params data)
-  (declare (optimize speed)
+  (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
+	   (optimize speed)
 	   (cons data)
 	   (ignore params))
   (let ((x (elt data 0))
@@ -110,7 +113,12 @@
 
 (defun lorder-mixed-bg-walker (data error &optional params)
   (unless params (setq params (data->guess-lorder-mixed-bg-params (map-matrix #'(lambda (x) (float x 1.0d0)) data))))
-  (create-walker #'lorder-mixed-bg params data error #'log-liklihood-normal #'log-prior-lorder-mixed))
+  (walker-init :fn #'lorder-mixed-bg
+	       :data data
+	       :params params
+	       :stddev error
+	       :log-liklihood #'log-liklihood-normal
+	       :log-prior #'log-prior-lorder-mixed))
 
 
  
@@ -135,7 +143,7 @@
 
 ;;; 2nd level fits helpers (crunch frequency and angular sweep into one massive set)
 (defun crunch-walkers-into-data (angular-walkers freq-walkers)
-  (let ((phis (linspace 0 (* 2 pi) :steps (length angular-walkers)))
+  (let ((phis (linspace 0 (* 2 pi) :num (length angular-walkers)))
 	(happ-phis (walker-set-get-median-params angular-walkers :x0 1000))
 	(phi-w (list (elt (walker-get-data-column (elt angular-walkers 0) 2) 0)))
 	(freqs (mapcar #'(lambda (x) (elt (walker-get-data-column x 2) 0)) freq-walkers))
@@ -166,7 +174,7 @@
 ;; (defun angular+freq-walker (angle-file freq-file)
 ;;   (let* ((angle-walkers (walker-set-load angle-file #'lorder-mixed-bg #'log-liklihood-normal #'log-prior-lorder-mixed))
 ;; 	 (freq-walkers (walker-set-load freq-file #'lorder-mixed-bg #'log-liklihood-normal #'log-prior-lorder-mixed)))
-;;     (setf woi (create-walker (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w)
+;;     (setf woi (walker-create (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w)
 ;; 			     '(:c-w 10d0 :meff 12000 :gamma 0.0028 :hu 20d0 :phi-offset 0.1 :c-phi-offset 0.2 :%-complete 0.9)
 ;; 			     (crunch-walkers-into-data angle-walkers freq-walkers)
 ;; 			     (crunch-walkers-into-error angle-walkers freq-walkers)

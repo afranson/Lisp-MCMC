@@ -4,7 +4,7 @@ A framework for doing Markov chain Monte Carlo (MCMC) based fitting with Common 
 
 ## Basic Usage
 
-Most functions are softly namespaced by starting with 'walker-', e.g. walker-adaptive-steps, walker-plot-data-and-fit, walker-save, walker-liklihood-plot, etc. The significant anomoly is 'create-walker', to initialize a walker.
+Most functions are softly namespaced by starting with 'walker-', e.g. walker-adaptive-steps, walker-plot-data-and-fit, walker-save, walker-liklihood-plot, etc. The significant anomoly is 'walker-create', to initialize a walker.
 
 Generally, you will want to abstract the 'create-walker' function to specialize to your specific fitting case (lorentzians, gaussians, whatever function).
 
@@ -38,7 +38,7 @@ Above we make use of the anaphoic macro 'prior-bounds-let' to bound the values o
 Once all that's together, you can create your MCMC walker:
 ```
 (defvar my-walker)
-(setq my-walker (create-walker my-function initial-params data error log-liklihood-normal-weighted my-log-prior))
+(setq my-walker (walker-create my-function initial-params data error log-liklihood-normal-weighted my-log-prior))
 ```
 and then run it
 ```
@@ -52,4 +52,4 @@ and then see if it produced anything useful (requires vg-plot package)
 
 ## Global Parameter Fitting
 
-To do global parameter fitting, you just need to use the create-walker function with a list of datasets, list of error values, list of fitting functions, list of log-liklihoods, and a list of log-priors. That's it. Everything else runs as normal (except walker-plot-data-and-fit, there you have to add the :fn-number kwarg to pick which function/data/fit you want to plot).
+To do global parameter fitting, you just need to use the walker-create function with a list of datasets, list of error values, list of fitting functions, list of log-liklihoods, and a list of log-priors. That's it. Everything else runs as normal (except walker-plot-data-and-fit, there you have to add the :fn-number kwarg to pick which function/data/fit you want to plot).
