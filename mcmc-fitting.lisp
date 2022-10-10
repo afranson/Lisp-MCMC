@@ -309,7 +309,7 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 	  (:add-step (step) (setq walker (nconc step walker)))))))
 
 (defmacro walker-create (name &rest rest &key fn data params (stddev 1) (log-liklihood #'log-liklihood-normal) (log-prior #'log-prior-flat) (init t) (docstring ""))
-  "Generates a walker with 'name' that can be called as (name msg arg ...) to perform the 'msg' command or used a variable name in functions."
+  "Generates a walker with 'name' that can be called as (name msg arg ...) to perform the 'msg' command or used as a variable name in functions."
   (declare (ignorable fn data params stddev log-liklihood log-prior init))
   `(progn
      (defparameter ,name (apply #'walker-init (list ,@rest)) ,docstring)
