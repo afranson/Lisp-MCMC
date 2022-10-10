@@ -19,6 +19,7 @@
 	       :log-prior #'log-prior-lorder-mixed
 	       :docstring "Fully customized walker for fitting a single lorentzian")
 
+;; 6.26 seconds for 1e5 steps
 (walker-adaptive-steps woi 100000)
 (walker-plot-data-and-fit woi :take 1000)
 
@@ -27,4 +28,6 @@
 (walker-adaptive-steps woil 100000)
 (walker-plot-data-and-fit woil :take 1000)
 
-;; 6.26 seconds for 1e5 steps
+#|
+(walker-save woil "walker001.wlk" 1000)
+|#

@@ -2,6 +2,9 @@
 
 (in-package :mcmc-fitting)
 
+(defun walker-get-data-column (the-walker column &optional (data-set 0))
+  (elt (elt (funcall the-walker :get-data) data-set) column))
+
 (defun data->guess-lorder-mixed-bg-params (data)
   (let ((x-data (elt data 0))
 	(y-data (elt data 1)))
@@ -113,7 +116,7 @@
 
 (defun lorder-mixed-bg-walker (&key data stddev (rows '(1 4)) params)
   (let* ((data (apply #'create-walker-data data rows)))
-    (unless params (setq params (data->guess-lorder-mixed-bg-params (elt data 0))))
+    (unless params (setq params (data->guess-lorder-mixed-bg-params data)))
     (walker-init :fn #'lorder-mixed-bg
 		 :data data
 		 :params params
@@ -193,7 +196,7 @@
 
 
 (defun walker-full-fit-load (filename)
-  (walker-load filename (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w) #'log-liklihood-normal #'log-prior-flat))
+  (walker-load filename :fn (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w) :log-liklihood #'log-liklihood-normal :log-prior #'log-prior-flat :quiet t))
 
 
 

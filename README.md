@@ -46,7 +46,7 @@ and then run it
 ```
 (walker-adaptive-steps my-walker)
 ```
-and then see if it produced anything useful (requires vg-plot package)
+and then see if it produced anything useful (requires vgplot package and gnuplot with qt)
 ```
 (walker-plot-data-and-fit my-walker)
 (walker-plot-liklihood-plot my-walker)

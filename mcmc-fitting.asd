@@ -13,7 +13,7 @@
 	       (:file "funcs")
 	       (:file "plotting-helpers")
 	       (:file "log-liklihood-prior")
-               (:file "vector-mcmc")
+               (:file "mcmc-fitting")
 	       (:file "fmr-specific")
 	       (:file "nv-specific")))
 
