@@ -196,7 +196,10 @@
 
 
 (defun walker-full-fit-load (filename)
-  (walker-load filename :fn (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w) :log-liklihood #'log-liklihood-normal :log-prior #'log-prior-flat :quiet t))
+  (walker-load filename
+	       :fn (list #'in-plane-fmr-happ-p #'in-plane-fmr-happ-w)
+	       :log-liklihood (list #'log-liklihood-normal #'log-liklihood-normal)
+	       :log-prior (list #'log-prior-flat #'log-prior-flat) :quiet t))
 
 
 
