@@ -128,19 +128,19 @@
 
 
 (defun file->lorder-walker-easy (filename &key (walker-function #'lorder-mixed-bg-walker) (conditioning-function #'lorder-conditioning) params)
-  (let* ((data (file->data-list filename))
+  (let* ((data (read-file->data filename))
 	 (the-walker (funcall walker-function (funcall conditioning-function data) (lorder-data-std-dev data) params)))
     (walker-adaptive-steps the-walker)
     the-walker))
 
 (defun file->lorder-walker-custom (filename walker-function conditioning-function &optional (n 100000) (temp 1000) (auto t) params)
-  (let* ((data (file->data-list filename))
+  (let* ((data (read-file->data filename))
 	 (the-walker (funcall walker-function (funcall conditioning-function data) (lorder-data-std-dev data) params)))
     (walker-adaptive-steps-full the-walker n temp auto)
     the-walker))
 
 (defun file->lorder-walker (filename walker-function conditioning-function &optional params)
-  (let* ((data (file->data-list filename))
+  (let* ((data (read-file->data filename))
 	 (the-walker (funcall walker-function (funcall conditioning-function data) (lorder-data-std-dev data) params)))
     the-walker))
 

@@ -21,7 +21,7 @@
 
 (defun 3d-plot-admr-file (filename &key (map t))
   (vgplot:format-plot t "reset")
-  (vgplot:format-plot t "set terminal qt size 1920,1080 linewidth 1 font \"Arial,40\"")
+  (vgplot:format-plot t "set terminal qt size 1080,1080 linewidth 1 font \"Arial,25\"")
   (vgplot:format-plot t "set ticslevel 0")
   (vgplot:format-plot t "set pm3d depthorder")
   (vgplot:format-plot t "set cblabel \"Absorption (dB)\"")
@@ -31,6 +31,7 @@
   (vgplot:format-plot t "unset key")
   (vgplot:format-plot t "unset grid")
   (vgplot:format-plot t "set pm3d at sb")
+  (vgplot:axis (list -80 80 -80 80))
   (vgplot:xlabel "X Field (Oe)" :replot nil)
   (vgplot:ylabel "Y Field (Oe)" :replot nil)
   (vgplot:zlabel "S21 (a.u.)" :replot nil)

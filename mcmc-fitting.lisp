@@ -5,10 +5,16 @@ advance it
 visualize it
 |#
 
-;;; TODO add a frame to the analysis - this gets added to log liklihood *
-;;; - this frame moves around randomly so that N datapoints get fit to
-;;; - trying to emulate more human problem solving and reduce the scope of the problem
-;;; - that way all the noise from the surrounding background doesn't get incorporated
+;; TODO add a frame to the analysis - this gets added to log liklihood *
+;; - this frame moves around randomly so that N datapoints get fit to
+;; - trying to emulate more human problem solving and reduce the scope of the problem
+;; - that way all the noise from the surrounding background doesn't get incorporated
+
+;; TODO Add HMC sampler option
+;; v + du/dx
+;; with sampling rejection
+;; with leap frog integration
+;; then use that for ML
 
 ;; Full arrays > list of arrays > pure lists
 ;; just lists don't benefit from optimization
@@ -52,8 +58,8 @@ visualize it
 	   (build-diff (x-data y-data &optional return-x return-y)
 	     (if (and (cadr x-data) (cadr y-data))
 		 (build-diff (cdr x-data) (cdr y-data)
-			     (nconc (list (avg-x-values x-data)) return-x)
-			     (nconc (list (diff-y x-data y-data)) return-y))
+			     (append (list (avg-x-values x-data)) return-x)
+			     (append (list (diff-y x-data y-data)) return-y))
 		 (list (reverse return-x) (reverse return-y)))))
     (build-diff x-data y-data)))
 
@@ -272,9 +278,9 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 	 (data (if trusted data (to-double-floats (clean-data data fn))))
 	 (params (to-double-floats params))
 	 (log-liklihood (force-list log-liklihood))
+	 (log-liklihood (log-liklihood-fixer log-liklihood fn params data stddev))
 	 (log-prior (force-list log-prior))
 	 (log-prior (log-prior-fixer log-prior params data))
-	 (log-liklihood (log-liklihood-fixer log-liklihood fn params data stddev))
 	 (param-keys (get-plist-keys params)))
     (assert (= (length fn) (length log-liklihood) (length log-prior) (length data))
 	    nil
@@ -437,7 +443,7 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 (defun walker-adaptive-steps-full (the-walker &optional (n 100000) (temperature 1d3) (auto t) l-matrix)
   (let* ((param-keys (walker-get-param-keys the-walker))
 	 (temp-steps 10000)
-	 (temps (linspace temperature 1 :num temp-steps))
+	 (temps (nconc (linspace temperature 1 :num (/ temp-steps 2)) (linspace temperature 1 :num (/ temp-steps 2))))
 	 (temp-temps (copy-seq temps))
 	 (current-acceptance 0))
     (flet ((stable-probs-p (probs)
@@ -756,25 +762,36 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 (defun walker-set-plot-param (the-walker-set key &optional take)
   (vgplot:plot (walker-set-get-median-params the-walker-set key take)))
 
-;; TODO is eval the only way???
-(defmacro walker-get-f (the-walker exp &optional take)
-  `(let ((median-params (walker-get-median-params ,the-walker ,take)))
-     (labels ((replace-param-names (item)
-		(cond ((null item) nil)
-		      ((atom item) (if (char= #\: (char (format nil "~s" item) 0)) (getf median-params item) item))
-		      ((consp item)
-		       (cons (replace-param-names (car item))
-			     (replace-param-names (cdr item)))))))
-       (let ((filled-exp (replace-param-names ',exp)))
-	  (eval filled-exp)))))
+(defmacro walker-get-f (the-walker exp &key (take 1000))
+  (let ((median-params (walker-get-median-params the-walker take)))
+    (labels ((replace-param-names (item)
+	       (cond ((null item) nil)
+		     ((atom item) (if (char= #\: (char (prin1-to-string item) 0))
+				      (getf median-params item)
+				      item))
+		     ((consp item)
+		      (cons (replace-param-names (car item))
+			    (replace-param-names (cdr item)))))))
+      (let ((filled-exp (replace-param-names exp)))
+	filled-exp))))
 
-;; TODO eval again, boooo.
-(defmacro walker-set-get-f (the-walker-set exp &optional take)
-  `(mapcar #'(lambda (x) (eval (walker-get-f x ',exp ,take))) ,the-walker-set))
+;; TODo eval?
+(defun walker-with-exp (the-walker exp &key (take 1000))
+  (let ((median-params (walker-get-median-params the-walker take)))
+    (labels ((replace-param-names (item)
+	       (cond ((null item) nil)
+		     ((atom item) (if (char= #\: (char (prin1-to-string item) 0))
+				      (getf median-params item)
+				      item))
+		     ((consp item)
+		      (cons (replace-param-names (car item))
+			    (replace-param-names (cdr item)))))))
+      (let ((filled-exp (replace-param-names exp)))
+	(eval filled-exp)))))
 
-;; TODO make it actually work
-(defun walker-set-plot-func (the-walker-set func)
-  (vgplot:plot (mapcar #'(lambda (x) (apply func x)) the-walker-set)))
+(defun walker-set-with-exp (the-walker-set exp &key (take 1000))
+  (mapcar #'(lambda (x) (walker-with-exp x exp :take take)) the-walker-set))
+
 
 (defun walker-set-easy-commands (the-walker-set index msg
 				 &key (take 1000) (n 100000) (temp 1d6) reset-params cat-probs-take plot-param filename)
@@ -788,13 +805,15 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 ;;; End of walker functionality
 
 
+
+;;; File gathering, reading, quick plotting
 (defun file->file-specs (filename &key (delim #\tab))
   "Tells the user various metrics about the file. Lines, header lines, data lines, data rows, data sets."
   (with-open-file (in filename :direction :input)
     (labels ((get-lines (&optional (num-lines 0) (found-data nil) (data-length nil) (data-rows nil))
 	       (let ((line (string-right-trim '(#\return) (read-line in nil nil)))) ; allow for Windows files
 		 (cond ((string= line "NIL") ; end of file - return info ; ordered by freque
-			(list :file-lines num-lines :header-lines found-data :data-length data-length :data-rows (unless data-rows (- num-lines found-data))data-rows :num-pages (if data-rows (floor (- num-lines found-data) data-rows) 1)))
+			(list :file-lines num-lines :header-lines found-data :data-length data-length :data-rows (if data-rows data-rows (- num-lines found-data)) :num-pages (if data-rows (floor (- num-lines found-data) data-rows) 1)))
 		       ((and (string= line "") found-data (not data-rows)) ; set data rows
 			(get-lines num-lines found-data data-length (- num-lines found-data)))
 		       ((string= line "") ; ignore line
@@ -805,13 +824,17 @@ probabilistic analysis. If trusted, doesn't do data dn stddev checking."
 			(get-lines (+ num-lines 1) found-data data-length data-rows))))))
       (get-lines))))
 
-;;; Designing a data toolbox
-;; Fundamentally, just stream all the numbers into one long array
-;; then converts it to a 2d array, as that's what is usually dealt with
-;; then the user could make it 1d or 3d or whatever they like after
+(defun make-data-into-pages (data file-specs)
+  (let ((ret-tree (make-list (getf file-specs :num-pages))))
+    (mapcar #'(lambda (x a b)
+		(setf x (mapcar #'(lambda (y)
+				    (subseq y a b))
+				data)))
+	    ret-tree
+	    (butlast (linspace 0 (* (getf file-specs :num-pages) (getf file-specs :data-rows)) :num (getf file-specs :num-pages)))
+	    (rest (linspace 0 (* (getf file-specs :num-pages) (getf file-specs :data-rows)) :num (getf file-specs :num-pages))))))
 
-;;; File stuff
-(defun file->data-list (filename &key (file-specs nil) (delim #\tab) (columns t))
+(defun read-file->data (filename &key (file-specs nil) (delim #\tab) (transpose t) pages)
   "Reads a file into a data list where 'elt 0' of the list is the first column by default.\n
 If row based, set columns to nil"
   (unless file-specs
@@ -824,24 +847,24 @@ If row based, set columns to nil"
 	     (read-file (stream)
 	       (when (setq line (read-line stream nil nil))
 		 (setq line (string-right-trim '(#\return) line))
-		 (push (mapcar #'read-from-string (split-string delim line)) file-contents)
+		 (let ((vals (mapcar #'read-from-string (split-string delim line))))
+		   (when vals
+		     (push vals file-contents)))
 		 (read-file stream))))
       (with-open-file (in filename :direction :input)
 	(remove-header-lines header-lines in)
 	(read-file in)
-	(if columns
-	    (transpose-matrix (reverse file-contents))
-	    (reverse file-contents))))))
+	(let ((file-contents
+		(if transpose
+		    (transpose-matrix (reverse file-contents))
+		    (reverse file-contents))))
+	  (if pages
+	      (make-data-into-pages file-contents file-specs)
+	      file-contents))))))
 
-(defun file->walker (filename fn params stddev log-liklihood log-prior)
-  "Generic function to read file and create walker based on specifying all inputs"
-  (let* ((data (file->data-list filename)))
-    (walker-init :fn fn :data data :params params :stddev stddev :log-liklihood log-liklihood :log-prior log-prior :init nil)))
-
-
-(defun file->plot (filename &key (x-column 0) (y-column 1))
-  (let* ((data (file->data-list filename)))
-    (vgplot:plot (elt data x-column) (elt data y-column))))
+(defun read-file->plot (filename &optional (x-column 0) (y-column 1))
+  (let* ((data (read-file->data filename)))
+    (plot (elt data x-column) (elt data y-column))))
 
 
 ;; file searching

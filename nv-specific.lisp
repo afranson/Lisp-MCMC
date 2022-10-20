@@ -7,7 +7,7 @@
 
 (defun nv-dir->data (directory)
   (let ((files (uiop:directory-files directory)))
-    (mapcan #'(lambda (x) (nv-data->separated (file->data-list x :delim #\;))) files)))
+    (mapcan #'(lambda (x) (nv-data->separated (read-file->data x :delim #\;))) files)))
 
 (defun log-liklihood-nv (fn params data error)
   (declare (optimize speed)
@@ -61,12 +61,12 @@
     walkers))
 
 (defun file->nv-walkers (filename)
-  (let ((walkers (mapcar #'nv-walker (nv-data->separated (file->data-list filename :delim #\;)))))
+  (let ((walkers (mapcar #'nv-walker (nv-data->separated (read-file->data filename :delim #\;)))))
     (mapc #'(lambda (x) (walker-adaptive-steps x)) walkers)
     walkers))
 
 (defun walker-field-offset (the-walker)
-  (walker-get-f the-walker (/ (- :mu2 :mu1) 2 2.8) 1000))
+  (walker-with-exp the-walker '(/ (- :mu2 :mu1) 2 2.8) :take 1000))
 
 ;;; TODO problem for another day
 ;; (defun walker-set-field-offset (the-walker-set background-splitting)
