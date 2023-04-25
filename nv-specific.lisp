@@ -21,7 +21,7 @@
 (defun log-prior-nv (params data)
   (declare (sb-ext:muffle-conditions sb-ext:compiler-note)
 	   (optimize speed)
-	   (ignore data))
+	   (ignorable data))
   (prior-bounds-let ((:scale1 1d-5 1d1)
 		     (:scale2 1d-5 1d1)
 	  	     (:mu1 2850 2870)
@@ -96,13 +96,10 @@
 
 
 (defun nv-pretty-heatmap (&key (map nil) (cbar-range '(0 "*")) (z-range '(-5 "*")))
-  (xlabel "X Pos" :replot nil)
-  (ylabel "Y Pos" :replot nil)
-  (zlabel "Field Offset (Oe)" :replot nil)
-  (format-plot t (format nil "set cbrange [~a:~a]" (elt cbar-range 0) (elt cbar-range 1)))
-  (format-plot t (format nil "set zrange [~a:~a]" (elt z-range 0) (elt z-range 1)))
-  (format-plot t "set zlabel rotate parallel")
-  (if map
-      (format-plot t "set view map")
-      (format-plot t "unset view"))
-  (replot))
+  (plt:send-command :xlabel "\"X Pos\""
+		    :ylabel "\"Y Pos\""
+		    :zlabel "\"Field Offset (Oe)\" rotate parallel"
+		    :cbrange (format nil "[~a:~a]" (elt cbar-range 0) (elt cbar-range 1))
+		    :zrange (format nil "[~a:~a]" (elt z-range 0) (elt z-range 1))
+		    :view (if map "map" "unset"))
+  (plt:replot))

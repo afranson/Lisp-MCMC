@@ -1,7 +1,8 @@
 ;;;; package.lisp
 
 (defpackage :mcmc-fitting
-  (:use :cl :vgplot)
+  (:nicknames :mfit)
+  (:use :cl)
   (:documentation "# mcmc-fitting
 
 Provides an interface for using Markov Chain Monte Carlo to do fitting of various functions.
@@ -10,11 +11,13 @@ Makes it easy to generate walker and probability distributions as well as advanc
 
 GNU General Public License
 ")
-  (:export :LOG-PRIOR-FLATS
+  (:export
+   :READ-FILE->DATA
+   :READ-FILE->PLOT
+   :LOG-PRIOR-FLATS
 	   :WALKER-PLOT-RESIDUALS
 	   :NV-DIR->DATA
 	   :FORCE-LIST
-	   :WALKER-GET-ACCEPTANCE
 	   :NTH-PERCENTILE
 	   :LOG-PRIOR-FIXER
 	   :LORDER-MIXED-BG-WALKER
@@ -32,9 +35,8 @@ GNU General Public License
 	   :DIR->NV-WALKERS
 	   :MAP-ARRAY
 	   :CHOLESKY-DECOMP
-	   :EXAMPLE-LPLIST
-	   :WALKER-DELETE
-	   :WALKER-GET-STDDEV-PARAMS
+           :EXAMPLE-LPLIST
+           :WALKER-SET-GET-STDDEV-PARAMS
 	   :LOG-PRIOR-LORDER-MIXED
 	   :SCALE-PLIST
 	   :GUESS-NV-PARAMS
@@ -48,7 +50,6 @@ GNU General Public License
 	   :WALKER-SET-PLOT-PARAM
 	   :EXAMPLE-LORDER-PARAMS
 	   :WALKER-GET-COVARIANCE-MATRIX
-	   :WALKER-GET-PROBS
 	   :LOG-LIKLIHOOD-NORMAL
 	   :DOT
 	   :3D-PLOT-FILE
@@ -60,7 +61,6 @@ GNU General Public License
 	   :LOG-PRIOR
 	   :WALKER-SET-DELETE
 	   :WALKER-FIT-ERROR-MAX-MIN
-	   :WALKER-GET-L-MATRIX
 	   :LOG-POISSON
 	   :WALKER-PRINT-LIST
 	   :95CR
@@ -72,7 +72,6 @@ GNU General Public License
 	   :DIFF-MATRIX
 	   :DIFF
 	   :WALKER-EASY-COMMANDS
-	   :WALKER-SET-GET-STDDEV-PARAMS
 	   :WALKER-SET-EASY-COMMANDS
 	   :REMOVE-BAD-FILES
 	   :DIAGONAL-COVARIANCE
@@ -88,19 +87,16 @@ GNU General Public License
 	   :LOG-PRIOR-FLAT
 	   :WALKER-LOAD
 	   :WALKER-ADAPTIVE-STEPS
-	   :WALKER-BURN-WALKS
 	   :WALKER-CONSTRUCT-PRINT-LIST
 	   :WALKER-FMR-PLOT-DATA-AND-FIT
 	   :GET-FILENAME
 	   :DIFF-LIST
 	   :FILE-SPECS
 	   :DATA-ROWS
-	   :WALKER-REMOVE-FAILED-WALKS
 	   :LORDER-I
 	   :WALKER-GET
 	   :WALKER-LIKLIHOOD-PLOT
 	   :IN-PLANE-FMR-HAPP-W
-	   :WALKER-GET-MOST-LIKELY-STEP
 	   :FILE->NV-WALKERS
 	   :MATRIX-LIST-OF-VECTORS
 	   :LOG-NORMAL
@@ -118,7 +114,6 @@ GNU General Public License
 	   :LORDER-BG-WALKER
 	   :GET-COVARIANT-SAMPLE
 	   :FILE->LORDER-WALKER-CUSTOM
-	   :WALKER-GET-PARAMS
 	   :WALKER-GET-F
 	   :MULTIVARIATE-GAUSSIAN-RANDOM
 	   :WALKER-CATEPILLAR-PLOTS
@@ -152,7 +147,6 @@ GNU General Public License
 	   :PARTITION
 	   :GET-PLIST-VALUES
 	   :NV-PRETTY-HEATMAP
-	   :WALKER-ADD-WALKS
 	   :IQR
 	   :LORDER-DATA-STD-DEV
 	   :EXAMPLE-L-MATRIX
@@ -162,13 +156,13 @@ GNU General Public License
 	   :MEDIAN
 	   :SHOW
 	   :DATA->GUESS-LORDER-MIXED-BG-PARAMS
-	   :WALKER-RESET
 	   :EXAMPLE-ARRAY
 	   :FILE->FILE-SPECS
 	   :LPLIST-TO-L-MATRIX
 	   :WALKER-FULL-FIT-LOAD
 	   :WALKER-STEP
 	   :LINSPACE
+	   :UP-TO
 	   :LORDER-R
 	   :LOG-FACTORIAL
 	   :WALK-DIRS
@@ -179,8 +173,7 @@ GNU General Public License
 	   :MAKE-HISTO-X
 	   :WALKER-ALL-2D-PLOTS
 	   :LOG-PRIOR-NV
-	   :PHI
-	   :CREATE-WALKER
+	   :WALKER-CREATE
 	   :ROTATE-RANDOM-SAMPLE
 	   :CRUNCH-FREQ-WALKERS-INTO-DATA
 	   :FILE->LORDER-WALKER
