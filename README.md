@@ -8,7 +8,7 @@ A quick example can be found in test.lisp.
 
 Most functions are softly namespaced by starting with 'walker-', e.g. walker-adaptive-steps, walker-plot-data-and-fit, walker-save, walker-liklihood-plot, etc.
 
-Generally, you will want to abstract the 'walker-init' function to specialize to your specific fitting case (lorentzians, gaussians, whatever function).
+Generally, you will want to abstract the 'walker-create' function to specialize to your specific fitting case (polynomial, exponential, sinusoidal, Lorentzian, Gaussian, whatever function).
 
 You will need to specify several functions before your MCMC journey can begin. First, a fitting function, or more generally, a function that assists in computing the liklihood that you want to maximize:
 ```
@@ -40,7 +40,7 @@ Above we make use of the anaphoic macro 'prior-bounds-let' to bound the values o
 Once all that's together, you can create your MCMC walker:
 ```
 (defvar my-walker)
-(setq my-walker (walker-init :fn my-function :data data :params initial-params :stddev stddev :log-liklihood #'log-liklihood-normal-weighted :log-prior #'my-log-prior))
+(setq my-walker (walker-create :function my-function :data data :params initial-params :data-error data-error :log-liklihood #'log-liklihood-normal-weighted :log-prior #'my-log-prior))
 ```
 and then run it
 ```
@@ -51,6 +51,7 @@ and then see if it produced anything useful (requires vgplot package and gnuplot
 (walker-plot-data-and-fit my-walker)
 (walker-plot-liklihood-plot my-walker)
 (walker-catepillar-plots my-walker)
+(show)
 ```
 
 ## Global Parameter Fitting
